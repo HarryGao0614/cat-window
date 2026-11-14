@@ -490,7 +490,8 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 /* ================= 猫窝装修：程序化森系猫屋（合并几何/轻量优化版） ================= */
-(()=>{
+// 返回苹果摆动列表（供渲染循环逐帧驱动钟摆）
+const appleSwingList=(()=>{
   const ANISO=Math.min(4,renderer.capabilities.getMaxAnisotropy());
   const rnd=(a,b)=>a+Math.random()*(b-a);
   const canvas=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
@@ -575,6 +576,8 @@ scene.add(ground);
   const cushionMat=mat({color:0x9c7c5e,roughness:1});
   const creamMat=mat({color:0xefe6d2,roughness:.85});
   const redCapMat=mat({color:0xd92b2b,roughness:.55});
+  const appleMatA=mat({color:0xa8241c,roughness:.34});   // 苹果（深红，略亮）
+  const appleMatB=mat({color:0x8e2b18,roughness:.40});   // 苹果（偏赭红，做层次）
   const gillMat=mat({map:tex(gillC),roughness:.9});
   const dotMat=mat({color:0xf6f1e6,roughness:.7});
   const leafMat=mat({color:0x4f7a3c,roughness:.85,side:THREE.DoubleSide});
@@ -736,13 +739,54 @@ scene.add(ground);
       putIn(parent,new THREE.SphereGeometry(.012*scale,8,6),dotMat,
         [capR*Math.sin(phi)*Math.cos(a),baseY+capR*Math.cos(phi),capR*Math.sin(phi)*Math.sin(a)]);}
   }
+  // 悬挂的苹果：绕挂点轻微摆动（钟摆），果身用旋转体轮廓，尺寸比上一版 +30%
+  const appleSwing=[];
+  function placeApple(scale,x,y,z){
+    const R=.065*scale;                      // 比上一版（.050）大 30%
+    const g=new THREE.Group();
+    g.position.set(x,1.06,z);                // 枢轴在挂点上，绕它摆动
+    const drop=1.06-y;
+    // 挂绳
+    const str=new THREE.Mesh(new THREE.CylinderGeometry(.0036,.0036,drop,6),leafDarkMat);
+    str.position.y=-drop/2; g.add(str);
+    // 果身：旋转体轮廓 + 5 瓣微起伏
+    const prof=[[0,1.02],[.12,1.00],[.30,.98],[.55,.90],[.78,.72],[.94,.45],[1.00,.15],
+                [.97,-.12],[.88,-.42],[.70,-.68],[.45,-.86],[.18,-.94],[0,-.96]];
+    const geo=new THREE.LatheGeometry(prof.map(([r,vy])=>new THREE.Vector2(r*R,vy*R)),28);
+    const bp=geo.attributes.position, bv=new THREE.Vector3();
+    for(let i=0;i<bp.count;i++){
+      bv.fromBufferAttribute(bp,i);
+      const th=Math.atan2(bv.z,bv.x), lobe=1+.022*Math.cos(th*5);
+      bp.setXYZ(i,bv.x*lobe,bv.y,bv.z*lobe);
+    }
+    geo.computeVertexNormals();
+    const body=new THREE.Mesh(geo,(Math.random()<.5?appleMatA:appleMatB));
+    body.position.y=-drop; body.castShadow=true; body.receiveShadow=true;
+    body.rotation.set(.06*(Math.random()-.5),Math.random()*6.28,0);
+    g.add(body);
+    // 果柄（从顶部凹窝斜出）
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(.0058,.0044,R*.5,7),rimWoodMat);
+    st.position.set(0,-drop+R*.72,0); st.rotation.set(.18,0,.12); g.add(st);
+    // 叶子
+    const lf=new THREE.Mesh(leafGeo,leafDarkMat);
+    lf.position.set(R*.75,-drop+R*.80,R*.28); lf.rotation.set(.55,Math.random()*6.28,.85);
+    lf.scale.set(.9,1.1,.9); g.add(lf);
+    // 摆动参数：频率/相位/幅度都随机，彼此不同步
+    g.userData={w:.55+Math.random()*.45, p:Math.random()*6.28, a:.05+Math.random()*.045};
+    forestGroup.add(g); appleSwing.push(g);
+  }
   function placeMush(scale,x,y,z,hanging){
     const parent=new THREE.Matrix4().compose(V(x,y,z),Q(0,0,0),V(1,1,1));
     mushroom(scale,parent,hanging);
   }
   placeMush(1.3,-1.04,.0,.018);placeMush(.75,-.575,.0,.473);placeMush(1.1,.773,.0,.338);
-  placeMush(1.15,-.45,.96,-.35,true);placeMush(.9,.42,.98,-.25,true);placeMush(.7,.05,1.0,-.5,true);
-  placeMush(.62,-.78,.94,-.52,true);placeMush(.5,.72,.92,-.58,true);
+  // 天花上原本悬挂的 5 个毒蝇伞，按用户要求换成苹果（用果柄挂在树冠上）
+  // 高低错落：不同挂果高度（y = 果心高度）+ 不同大小，避免排成一条线
+  placeApple(1.05,-.45,.90,-.35);
+  placeApple(.80,  .42,.99,-.25);
+  placeApple(1.18,  .05,.86,-.50);
+  placeApple(.62, -.78,.96,-.52);
+  placeApple(.92,  .72,.88,-.58);
 
   /* ---------- 苔藓天花 ---------- */
   const ceilGeo=new THREE.PlaneGeometry(2.8,2.2,18,14);
@@ -812,7 +856,7 @@ scene.add(ground);
   [[-.35,.5,-.35],[.4,.62,-.4],[0,.85,-.55],[.24,.8,-.3],[-.3,.8,-.28]].forEach(p=>put(new THREE.SphereGeometry(.014,8,6),glowMat,p));
 
   /* ---------- 合并并加入组 ---------- */
-  const shadowMats=new Set([barkMat,mossMat,creamMat,redCapMat,rimWoodMat,cushionMat]);
+  const shadowMats=new Set([barkMat,mossMat,creamMat,redCapMat,rimWoodMat,cushionMat,appleMatA,appleMatB]);
   for(const [material,geos] of buckets){
     const mergedGeo=mergeGeometries(geos,false);
     const mesh=new THREE.Mesh(mergedGeo,material);
@@ -890,7 +934,7 @@ scene.add(ground);
       pos[i*3]=rnd(-2.3,2.3);pos[i*3+1]=rnd(.7,1.5);pos[i*3+2]=rnd(-2.4,-.7);ph[i]=Math.random();}
     twinklePoints(pos,ph,0xe6efff,2.4,0);
   }
-  return points;
+  return appleSwing;
 })();
 
 
@@ -2228,6 +2272,12 @@ function loop(){
     purrFade=THREE.MathUtils.clamp((STATE.moveZ-FAR_Z)/(JOIN_Z-FAR_Z),0,1);
   }
   CatAudio.update(Math.max(STATE.enjoy, stretchPurr), dt, purrFade);
+  // 苹果轻微摆动（绕挂点的钟摆，每个频率/相位/幅度不同）
+  if(appleSwingList) for(const ap of appleSwingList){
+    const u=ap.userData;
+    ap.rotation.z=Math.sin(t*u.w+u.p)*u.a;
+    ap.rotation.x=Math.cos(t*u.w*.78+u.p*1.3)*u.a*.65;
+  }
   // 洞内压暗：z 越靠里越暗（-0.03 起、-0.14 到底，最暗 20%），走出洞口逐渐恢复
   if(rig.catMats){
     const deep=THREE.MathUtils.clamp((-.03-STATE.moveZ)/.11,0,1);
