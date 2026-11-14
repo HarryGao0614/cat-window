@@ -421,7 +421,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
-const FAR_Z=-.4, JOIN_Z=.12, WALK_SPD=.045;   // 慢速走出树洞；定点贴近屏幕
+const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.4;                             // 伸懒腰总时长（关键帧包络都用它）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -753,13 +753,21 @@ scene.add(ground);
   ceilGeo.computeVertexNormals();
   put(ceilGeo,mossMat,[0,1.08,-.25],[Math.PI/2,0,0]);
 
+  // 是否位于树干体内（含余量）：长进树干的叶子/花会在树洞里穿帮，必须挡掉
+  const inTrunkBody=(x,z,m=.06)=>Math.hypot(x, z-STUMP.zs) < rAt(.85)+m;
   /* ---------- 藤蔓 ---------- */
   function vine(x,z,len){
+    // 若藤蔓起点落在树干体内，往外推到树皮外侧，避免垂进树洞
+    if(inTrunkBody(x,z,.12)){
+      const R=rAt(.85)+.14, dz=z-STUMP.zs, half=Math.sqrt(Math.max(0,R*R-dz*dz));
+      x=(x<0?-1:1)*Math.max(Math.abs(x),half);
+    }
     const top=1.05,pts=[];
     for(let i=0;i<=5;i++){const t=i/5;
       pts.push(V(x+Math.sin(t*4)*.035,top-t*len,z+Math.cos(t*3)*.035));}
     put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),14,.006,6),leafDarkMat);
     for(let i=1;i<=4;i++){const t=i/5;
+      if(inTrunkBody(x+Math.sin(t*4)*.035, z+Math.cos(t*3)*.035, .04)) continue;   // 叶子不要长进树干
       put(leafGeo,Math.random()<.5?leafMat:leafDarkMat,
         [x+Math.sin(t*4)*.035+rnd(-.02,.02),top-t*len,z+Math.cos(t*3)*.035+rnd(-.02,.02)],
         [rnd(0,3),rnd(0,3),rnd(0,3)]);}
@@ -768,11 +776,17 @@ scene.add(ground);
 
   /* ---------- 紫藤 ---------- */
   function wisteria(x,z,drop){
+    if(inTrunkBody(x,z,.12)){
+      const R=rAt(.85)+.14, dz=z-STUMP.zs, half=Math.sqrt(Math.max(0,R*R-dz*dz));
+      x=(x<0?-1:1)*Math.max(Math.abs(x),half);
+    }
     const top=1.05;
     put(new THREE.CylinderGeometry(.004,.004,drop,5),leafDarkMat,[x,top-drop/2,z]);
     for(let i=0;i<7;i++){const t=i/6;
-      put(new THREE.SphereGeometry(.018,8,7),flowerMats[i%flowerMats.length],
-        [x+rnd(-.03,.03),top-drop*t,z+rnd(-.03,.03)],null,[1,1.4,1]);}
+      { const fx=x+rnd(-.03,.03), fz=z+rnd(-.03,.03);
+        if(inTrunkBody(fx,fz,.04)) continue;                    // 花串不要垂进树干
+        put(new THREE.SphereGeometry(.018,8,7),flowerMats[i%flowerMats.length],
+          [fx,top-drop*t,fz],null,[1,1.4,1]); }}
   }
   wisteria(-.25,-.7,.4);wisteria(.28,-.7,.42);wisteria(.75,-.5,.38);wisteria(-.78,-.45,.36);
   wisteria(.5,-.62,.44);wisteria(-.55,-.58,.4);
@@ -809,7 +823,11 @@ scene.add(ground);
 
   /* ---------- 光中尘埃 ---------- */
   const N=100,pf=new Float32Array(N*3);
-  for(let i=0;i<N;i++){pf[i*3]=rnd(-.9,.9);pf[i*3+1]=rnd(.2,.95);pf[i*3+2]=rnd(-.7,.3);}
+  for(let i=0;i<N;i++){
+    let x,z;
+    do{ x=rnd(-.9,.9); z=rnd(-.7,.3); } while(Math.hypot(x, z-STUMP.zs) < rAt(.55)+.10);
+    pf[i*3]=x;pf[i*3+1]=rnd(.2,.95);pf[i*3+2]=z;
+  }
   const pg2=new THREE.BufferGeometry();pg2.setAttribute('position',new THREE.BufferAttribute(pf,3));
   const points=new THREE.Points(pg2,new THREE.PointsMaterial(
     {color:0xe8d4a0,size:.008,transparent:true,opacity:.4,depthWrite:0}));
@@ -843,7 +861,12 @@ scene.add(ground);
   // 萤火虫：贴近地面/林间，暖黄绿，缓慢漂移
   {
     const n=64,pos=new Float32Array(n*3),ph=new Float32Array(n);
-    for(let i=0;i<n;i++){pos[i*3]=rnd(-1.3,1.3);pos[i*3+1]=rnd(.15,.85);pos[i*3+2]=rnd(-1.2,.5);ph[i]=Math.random();}
+    for(let i=0;i<n;i++){
+      let x,z;
+      do{ x=rnd(-1.3,1.3); z=rnd(-1.2,.5); }                     // 避开树干体：洞里不能出现外面飘的光点
+      while(Math.hypot(x, z-STUMP.zs) < rAt(.55)+.14);
+      pos[i*3]=x;pos[i*3+1]=rnd(.15,.85);pos[i*3+2]=z;ph[i]=Math.random();
+    }
     twinklePoints(pos,ph,0xd9ff8a,3.4,.06);
   }
   // 月亮：夜空里的一轮冷白，带加性光晕
@@ -1378,7 +1401,8 @@ function updateActions(t, dt){
     STATE.sessT+=dt;
     if(STATE.sessT>=SESS_MAX || STATE.overstim>=1){
       STATE.top='free'; STATE.coolT=2+Math.random()*2; STATE.gazeT=-1;   // 原地冷却 2~4s 随机
-      STATE.action='idle'; STATE.actionT=0; STATE.actionCool=1.5+Math.random()*1.5;
+      STATE.moveX=0; STATE._hopY=0; STATE.action='idle'; STATE.actionT=0;
+      STATE.actionCool=1.5+Math.random()*1.5;
       resetStanceAnchors();
     }
   }
@@ -1502,8 +1526,17 @@ function updateActions(t, dt){
       rp.blink=1; rp._blinkCount=0; rp._blinkEvery=2+((Math.random()*2)|0);
     }
   }
-  if(fgEv.nod!==rp._last.nod){ rp._last.nod=fgEv.nod; rp.nod=1; rp.nodT=0; }   // 记录时间轴：猫跟着点一下
-  if(fgEv.shake!==rp._last.shake){ rp._last.shake=fgEv.shake; rp.shake=1; rp.shakeSide=fgEv.turnSide||rp.shakeSide; }
+  // 互动互斥：点头/摇头同一时刻只做一个，做完才能接下一个（避免两个动作叠在一起）
+  rp._lock=Math.max(0,(rp._lock||0)-dt);
+  const claim=(dur)=>{ if(rp._lock>0) return false; rp._lock=dur; return true; };
+  if(fgEv.nod!==rp._last.nod){
+    rp._last.nod=fgEv.nod;
+    if(claim(0.62)){ rp.nod=1; rp.nodT=0; }        // 跟着点一下（点头可连续：冷却 .55s < 动画 .62s 时自动排队）
+  }
+  if(fgEv.shake!==rp._last.shake){
+    rp._last.shake=fgEv.shake;
+    if(claim(1.0)){ rp.shake=1; rp.shakeSide=fgEv.turnSide||rp.shakeSide; }
+  }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
   rp.nod=damp(rp.nod,0,2.6,dt);
@@ -1631,7 +1664,7 @@ function updateActions(t, dt){
   if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='hop'
      && STATE.hopCool<=0 && STATE._wandSpd>1.6 && STATE.pawLift.L<.1 && STATE.pawLift.R<.1){
     STATE.action='hop'; STATE.actionT=0;
-    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=7.2; STATE._wandSpd=0;
+    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=5.8; STATE._wandSpd=0;
   }
   if(STATE.clickPounce){
     STATE.clickPounce=false;
@@ -1736,14 +1769,14 @@ function updateActions(t, dt){
   if(act==='hop'){
     // 6.5s / 共 6 次起跳：原地两下 → 向左 → 回中 → 向右 → 回中
     STATE.actionT+=dt;
-    const HOP_D=6.5, tt=STATE.actionT;
+    const HOP_D=5.2, tt=STATE.actionT;
     const easeIO=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
-    // 起跳/落地时间只用每段的 60%（比原来快约 50%），其余时间落地站稳，不再像气球
-    const FAST=.60;
+    // 每段弧线占满整段：落地瞬间立刻接下一次起跳，动作连贯无停顿（整体比上一版快 20%）
+    const FAST=1.0;
     const arc=k=>Math.sin(Math.PI*Math.min(1,Math.max(0,k)))*.055;
     // [开始, 结束, 起点x, 终点x] —— 每段一次独立抛物线起跳
-    const SEG=[[0,1.0,0,0],[1.0,2.0,0,0],[2.0,3.2,0,-.11],
-               [3.2,4.4,-.11,0],[4.4,5.6,0,.11],[5.6,6.5,.11,0]];
+    const SEG=[[0,.80,0,0],[.80,1.60,0,0],[1.60,2.56,0,-.11],
+               [2.56,3.52,-.11,0],[3.52,4.48,0,.11],[4.48,5.20,.11,0]];
     let x=0,y=0;
     for(const [a,b,x0,x1] of SEG){
       if(tt>=a && tt<b){
@@ -1778,6 +1811,8 @@ function updateActions(t, dt){
     const leanPeak=(STATE.pounceTarget.x-.5)*.12;          // 朝点击点方向的横向扑幅（左右各 ±.06）
     STATE.moveX=THREE.MathUtils.clamp((STATE.moveZ-JOIN_Z)/PEAK,0,1)*leanPeak;
   }
+  // 兜底：蹦跳/扑玩被其它状态打断时，横向偏移必须归零，否则猫会卡在偏离定点的位置
+  if(act!=='hop' && act!=='pounce' && act!=='walkIn') STATE.moveX=damp(STATE.moveX,0,12,dt);
   // 步态：walkIn 直走时启用脚部步态（沿 z 前进，不整身滑动），pounce 走专属逻辑
   const feetOn = act==='walkIn';
   GAIT.effStride=damp(GAIT.effStride,GAIT.stride,8,dt);
@@ -2541,8 +2576,8 @@ function detectFaceGestures(fl, nowSec){
   faceGestDet.coolNod=Math.max(0,faceGestDet.coolNod-ddt);
   faceGestDet.coolShake=Math.max(0,faceGestDet.coolShake-ddt);
   // 点头：一次向下往返即算（need=1），门槛 .12 更灵敏；摇头：左右各一次完整往返（need=2）
-  // 点头：门槛 .09（原来 .12，轻微点头也能中）、窗口 1.6s、冷却 1.0s（可以连着跟点）
-  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.09,1.6,1)){ out.nod=true; faceGestDet.coolNod=1.0; }
+  // 点头：门槛 .07（更灵敏）、窗口 1.2s、冷却 .55s（可以连续跟点）
+  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.07,1.2,1)){ out.nod=true; faceGestDet.coolNod=0.55; }
   if(faceGestDet.coolShake<=0 && excFeed(hx,faceGestDet.excX,nowSec,.18,1.4,2)){ out.shake=true; faceGestDet.coolShake=1.4; }
   return out;
 }
