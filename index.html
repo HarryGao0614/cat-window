@@ -163,17 +163,19 @@
   #soundBtn:hover{color:var(--amber);border-color:var(--amber)}
   #soundBtn.on{color:var(--amber);border-color:var(--amber)}
   @media (max-width:640px){ #soundBtn{top:148px;right:16px} }
-  /* 一键收起：互动指南 + 状态栏 */
+  /* 一键收起：互动指南 + 状态栏（按钮放在标题下方） */
   #hideChromeBtn{
-    position:fixed;top:162px;right:26px;z-index:6;pointer-events:auto;cursor:pointer;
+    margin-top:10px;z-index:6;pointer-events:auto;cursor:pointer;display:inline-block;
     font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--dim);
     background:rgba(20,16,14,.55);border:1px solid var(--line);border-radius:30px;
-    padding:8px 14px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
+    padding:7px 14px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
   }
   #hideChromeBtn:hover{color:var(--amber);border-color:var(--amber)}
   #hideChromeBtn.on{color:var(--amber);border-color:var(--amber)}
   body.chromeHidden #guide{display:none!important}
-  @media (max-width:640px){ #hideChromeBtn{top:192px;right:16px} }
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px}
+  header .brk{flex-basis:100%;height:0}
+  header #hideChromeBtn{flex:0 0 auto;align-self:flex-start}
   /* 标定遮罩 */
   #calibOverlay{
     display:none;position:fixed;inset:0;z-index:20;
@@ -242,13 +244,16 @@
 <header>
   <h1>网页猫猫</h1>
   <span class="sub">本地识别 · 画面不上传</span>
+  <span class="brk"></span>
+  <button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与左下角状态栏（H 键）">收起面板</button>
 </header>
 
 <div id="inputToggle" role="group" aria-label="输入模式切换">
   <button id="modeCam" class="on" type="button">看猫猫</button>
   <button id="modeMouse" type="button">逗猫棒</button>
 </div>
-<button id="calibBtn" type="button">视线标定</button>
+<button id="calibBtn" type="button" title="视线标定：按 9 个点依次注视摄像头，校准猫咪的注视方向；不想标定可直接跳过
+（快捷键 C）">视线标定 <span style="opacity:.65;font-size:11px">ⓘ</span></button>
 <button id="soundBtn" class="on" type="button" aria-label="背景音乐开关" aria-pressed="true" title="背景音乐开关（呼噜声自动播放）">
   <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
     <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
@@ -257,7 +262,6 @@
   </svg>
   <span id="soundLabel">音乐开</span>
 </button>
-<button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与状态栏（H 键）">收起面板</button>
 
 <svg id="wand" aria-hidden="true">
   <defs>
@@ -449,7 +453,7 @@ window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
-const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=1.88, SNIFF_HOLD=2.0, SNIFF_BACK=1.75;   // 走近/退回再慢 20%   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
+const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=2.68, SNIFF_HOLD=2.0, SNIFF_BACK=2.5;    // 走近/退回再慢 30%   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -2344,30 +2348,22 @@ const D=.09*c + .032*s;
       b1.updateWorldMatrix(true,false);
       alignBone(b2,t2);
       bc.position.copy(bc.parent.worldToLocal(W.clone()));
-      // 腕部放平：前臂前伸时腕部随之下倾，绕侧向轴反向旋转，让掌背（本地 +z）回到竖直、
-      // 掌面贴地，避免前伸时掌/前臂下半穿进地面
-      bc.updateWorldMatrix(true,false);
-      const wQ0=bc.getWorldQuaternion(new THREE.Quaternion());
-      const curZ0=new THREE.Vector3(0,0,1).applyQuaternion(wQ0);
-      let flatAng=Math.atan2(
-        curZ0.dot(new THREE.Vector3().crossVectors(LAT,UP)), curZ0.dot(UP));
-      if(Math.abs(flatAng)>2.6) flatAng=0;          // 接近 ±π 时放弃修正，避免掌子翻转
-      const corrQ=new THREE.Quaternion().setFromAxisAngle(LAT,flatAng);
-      const newWQ0=corrQ.multiply(wQ0);
-      const parQ0=bc.parent.getWorldQuaternion(new THREE.Quaternion());
-      bc.quaternion.copy(parQ0.invert().multiply(newWQ0));
-      // 去掉绕掌轴的扭转：把掌本地 X 轴投影到地面后与侧向轴对齐，避免"歪斜扭曲"
-      bc.updateWorldMatrix(true,false);
-      const wQ1=bc.getWorldQuaternion(new THREE.Quaternion());
-      const curX=new THREE.Vector3(1,0,0).applyQuaternion(wQ1);
-      const xp=curX.clone().addScaledVector(UP,-curX.dot(UP));
-      if(xp.lengthSq()>1e-6){
-        xp.normalize();
-        const tgtX=LAT.clone().multiplyScalar((Math.sign(xp.dot(LAT))||1));
-        const roll=Math.atan2(xp.clone().cross(tgtX).dot(UP), xp.dot(tgtX));
-        const rq=new THREE.Quaternion().setFromAxisAngle(UP,roll);
-        const parQ1=bc.parent.getWorldQuaternion(new THREE.Quaternion());
-        bc.quaternion.copy(parQ1.invert().multiply(rq.multiply(wQ1)));
+      // 掌姿态：直接解析构造正交基（+Z 朝天、+X 沿前臂水平投影），
+      // 不依赖 atan2 的翻转判断，任何角度都不会扭/翻；再用 stReach 与静止姿态插值，起手无跳变
+      {
+        bc.updateWorldMatrix(true,false);
+        const foreW=W.clone().sub(E).normalize();                       // 前臂方向（世界）
+        const fwd=foreW.clone().addScaledVector(UP,-foreW.dot(UP));     // 水平投影
+        if(fwd.lengthSq()<1e-6) fwd.copy(F); else fwd.normalize();
+        const yAx=new THREE.Vector3().crossVectors(UP,fwd).normalize(); // 右手系：x×y=z
+        const basis=new THREE.Matrix4().makeBasis(fwd,yAx,UP.clone());
+        const wQT=new THREE.Quaternion().setFromRotationMatrix(basis);
+        // 静止姿态（把 base 旋到世界）作为插值起点
+        const parW=bc.parent.getWorldQuaternion(new THREE.Quaternion());
+        const wQBase=parW.clone().multiply(rig.base[bc.name]||new THREE.Quaternion());
+        const k=Math.min(1,stReach*2.5);
+        const wQ=wQBase.clone().slerp(wQT,k);
+        bc.quaternion.copy(parW.invert().multiply(wQ));
       }
     };
     stretchOne('R'); stretchOne('L');
