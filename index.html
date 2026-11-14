@@ -2019,9 +2019,9 @@ const D=.09*c + .032*s;
   let stDip=0, stYaw=0, stPitch=0;
   if(act==='stretch'){
     stDip=.012*stArch;
-    // 随机向左/右小幅转约10°再伸懒腰；快速转到位，结束前慢慢转回（回正更缓）
+    // 不再左右偏转（原 ±10° → 0°）：斜向伸展会让单侧前臂/掌部蒙皮被拉变形，正对前方最稳
     const sIn=clamp01(at/.7), sOut=1-clamp01((at-1.7)/.9);
-    stYaw=(STATE.stretchSide||1)*(Math.PI/18)*Math.min(sIn,sOut);
+    stYaw=0*Math.min(sIn,sOut);
     // 祝祷式：身体前倾（前低后高），峰值在中段，配合前伸/弓背
     stPitch=.34*plateauEnvelope(at,.30,1.05,2.75,3.60); }    // 整身前倾约 19°：脊柱与前腿连成一条斜线（弧线）
   rig.root.position.set(
@@ -2304,17 +2304,17 @@ const D=.09*c + .032*s;
       // 水平侧向轴（与前向 F 正交）；按肩实际所在侧定符号，保证两掌都向外分
       const LAT=new THREE.Vector3(Math.cos(stYaw),0,-Math.sin(stYaw));
       const sideSign=Math.sign(S.dot(LAT))||1;
-      const latSep=stReach*.014;    // 前掌分得更开：前臂从头部两侧绕过，避免与前臂穿模
+      const latSep=stReach*.009;    // 外分收小：侧向剪切小，掌腕蒙皮不易变形（仍分得开、不碰头）
       // 目标：从肩沿身体前向送出并向外分，掌落在地面并略微压下去（stReach 越大压得越低）
       // 前臂平铺：目标比"直腿最大前伸"更远一些，让肘部自然弯向地面、前臂贴地
       const Ltot=(L1+L2)*.999, hgt=Math.max(.04,S.y-groundY);
       const horiz=Math.sqrt(Math.max(0,Ltot*Ltot-hgt*hgt));
-      let W=S.clone().addScaledVector(F,horiz*1.02*stReach).addScaledVector(LAT,sideSign*latSep);
+      let W=S.clone().addScaledVector(F,horiz*.94*stReach).addScaledVector(LAT,sideSign*latSep);
       W.y=groundY+.020;   // 掌面平铺在地面上（抬高 20mm，防止掌/前臂穿进地面）
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
       rel=rel.sub(lat);
-      const maxD=(L1+L2)*.9995, minD=Math.abs(L1-L2)+.002;   // 允许吃到满长 → 笔直
+      const maxD=(L1+L2)*.965, minD=Math.abs(L1-L2)+.002;    // 软限位：留 3.5% 余量，杜绝超伸拉变形
       const d=Math.max(minD,Math.min(rel.length(),maxD));
       rel.setLength(d);
       rel.addScaledVector(LAT,sideSign*latSep);   // 解完前向-竖直 IK 后加回外分量
