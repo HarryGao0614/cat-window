@@ -281,7 +281,7 @@
     <h4>逗猫棒模式</h4>
     <ul>
       <li><b>移动逗猫棒</b>：棒尖移动，猫咪眼睛平滑跟随棒尖</li>
-      <li><b>快速来回挥动</b>：猫咪开心地蹦 6 下（原地两下 + 左 + 右）再回原位</li>
+      <li><b>快速点击</b>：逗猫棒被戳得快速抖动（猫咪会跟着扑一下）</li>
       <li><b>在某处快速点击</b>：猫咪朝该位置扑玩一下，再退回原位</li>
     </ul>
     <h4>通用</h4>
@@ -873,7 +873,7 @@ scene.add(ground);
   {
     const moonMat=new THREE.MeshBasicMaterial({color:0xe4ecff,fog:false});
     const moon=new THREE.Mesh(new THREE.SphereGeometry(.16,24,18),moonMat);
-    moon.position.set(-1.15,1.38,-2.35); forestGroup.add(moon);
+    moon.position.set(-1.15,1.12,-2.35); forestGroup.add(moon);   // 位置下移，靠近树冠
     const haloTex=tex((()=>{const c=canvas(128,128),x=c.getContext('2d');
       const g=x.createRadialGradient(64,64,2,64,64,62);
       g.addColorStop(0,'rgba(200,220,255,.75)');g.addColorStop(.35,'rgba(150,185,255,.22)');
@@ -1651,21 +1651,6 @@ function updateActions(t, dt){
     STATE.action='pounce';STATE.actionT=0;
   }
   STATE._pinchHeld=pinchNow;
-  // 夸张互动：逗猫棒（就猫棒模式）快速来回挥动 → 猫开心地蹦 6 下再回原位
-  if(STATE.hopCool>0) STATE.hopCool-=dt;
-  let wandSpd=0;
-  if(STATE.inputMode==='mouse' && STATE.pointer.active){
-    if(STATE._prevPtr && dt>1e-4){
-      wandSpd=Math.hypot(STATE.pointer.x-STATE._prevPtr.x, STATE.pointer.y-STATE._prevPtr.y)/dt;
-    }
-    STATE._prevPtr={x:STATE.pointer.x,y:STATE.pointer.y};
-  } else STATE._prevPtr=null;
-  if(STATE.pointer.active) STATE._wandSpd=damp(STATE._wandSpd||0, wandSpd, 12, dt);
-  if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='hop'
-     && STATE.hopCool<=0 && STATE._wandSpd>1.6 && STATE.pawLift.L<.1 && STATE.pawLift.R<.1){
-    STATE.action='hop'; STATE.actionT=0;
-    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=5.8; STATE._wandSpd=0;
-  }
   if(STATE.clickPounce){
     STATE.clickPounce=false;
     if(STATE.pounceCool<=0 && STATE.action!=='pounce' && STATE.top==='engaged'){
@@ -2280,12 +2265,14 @@ addEventListener('pointerdown', e=>{
   STATE.pounceTarget.x=e.clientX/innerWidth;
   STATE.pounceTarget.y=e.clientY/innerHeight;
   STATE.clickPounce=true;
+  _wandJig=Math.min(.35, _wandJig+.18);   // 棒子被戳一下：快速抖动
 });
 
 /* 逗猫棒：棒尖跟随指针（带轻微重量感的平滑），细棍从右下屏外伸入到棒尖 */
 const wandRod=document.getElementById('wandRod'),
       wandTipG=document.getElementById('wandTip'), metalGrad=document.getElementById('metalGrad');
 let _wx=innerWidth/2,_wy=innerHeight*.62,_wandInit=false,_wAng=-Math.PI/2;
+let _wandJig=0, _wandLast=performance.now()/1000;   // 点击逗猫棒的快速抖动（0~.35s，可叠加）
 const WAND_LEN=230;   // 棒棒糖纸棒总长；指针热点在棒身中点（重心），糖果端朝猫
 function updateWand(){
   if(STATE.inputMode!=='mouse') return;
@@ -2298,14 +2285,23 @@ function updateWand(){
   let d=target-_wAng;
   while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2;
   _wAng+=d*.18;
+  // 点击抖动：高频小位移 + 小幅摆角，随时间衰减（连点会叠加到手感更强）
+  const nowS=performance.now()/1000;
+  const dtJ=Math.min(.1, Math.max(0, nowS-_wandLast)); _wandLast=nowS;
+  if(_wandJig>0) _wandJig=Math.max(0,_wandJig-dtJ*1.9);
+  const jigK=Math.min(1,_wandJig/.18);
+  const jigX=_wandJig>0?Math.sin(nowS*72)*9*jigK:0;
+  const jigY=_wandJig>0?Math.sin(nowS*61+1.7)*7*jigK:0;
+  const jigA=_wandJig>0?Math.sin(nowS*55+.6)*.13*jigK:0;
+  const ang=_wAng+jigA;
   const half=WAND_LEN/2;
-  const cx=_wx+Math.cos(_wAng)*half, cy=_wy+Math.sin(_wAng)*half; // 糖果端（朝猫）
-  const hx=_wx-Math.cos(_wAng)*half, hy=_wy-Math.sin(_wAng)*half; // 手柄端
+  const cx=_wx+jigX+Math.cos(ang)*half, cy=_wy+jigY+Math.sin(ang)*half; // 糖果端（朝猫）
+  const hx=_wx+jigX-Math.cos(ang)*half, hy=_wy+jigY-Math.sin(ang)*half; // 手柄端
   wandRod.setAttribute('x1',hx); wandRod.setAttribute('y1',hy);
   wandRod.setAttribute('x2',cx); wandRod.setAttribute('y2',cy);
   wandTipG.setAttribute('transform',`translate(${cx},${cy})`);
   // 金属渐变沿棒身法向（圆柱横截面高光）
-  const px=-Math.sin(_wAng), py=Math.cos(_wAng), hw=2.6;
+  const px=-Math.sin(ang), py=Math.cos(ang), hw=2.6;
   metalGrad.setAttribute('x1',_wx+px*hw); metalGrad.setAttribute('y1',_wy+py*hw);
   metalGrad.setAttribute('x2',_wx-px*hw); metalGrad.setAttribute('y2',_wy-py*hw);
 }
