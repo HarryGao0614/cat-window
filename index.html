@@ -144,38 +144,30 @@
   #wandRod{stroke:url(#metalGrad);stroke-width:5.5;stroke-linecap:round;}
   body.wandMode{cursor:crosshair;}
 
-  /* 视线标定入口 */
-  #calibBtn{
-    position:fixed;top:74px;right:26px;z-index:6;pointer-events:auto;cursor:pointer;
+  /* 右上工具栏：视线标定 / 音乐 / 收起面板，等间距一行排开 */
+  #toolbar{
+    position:fixed;top:74px;right:26px;z-index:6;display:flex;align-items:center;gap:8px;
+    pointer-events:auto;
+  }
+  #toolbar button{
+    position:static;display:flex;align-items:center;gap:6px;
     font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--dim);
     background:rgba(20,16,14,.55);border:1px solid var(--line);border-radius:30px;
-    padding:8px 16px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
+    padding:8px 14px;backdrop-filter:blur(6px);cursor:pointer;
+    transition:color .2s,border-color .2s,background .2s;white-space:nowrap;
   }
-  #calibBtn:hover{color:var(--amber);border-color:var(--amber)}
-  /* 声音开关：默认关闭，开启后图标变琥珀色 */
-  #soundBtn{
-    position:fixed;top:118px;right:26px;z-index:6;pointer-events:auto;cursor:pointer;
-    display:flex;align-items:center;gap:6px;
-    font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--dim);
-    background:rgba(20,16,14,.55);border:1px solid var(--line);border-radius:30px;
-    padding:8px 14px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
+  #toolbar button:hover{color:var(--amber);border-color:var(--amber)}
+  #toolbar button.on{color:var(--amber);border-color:var(--amber)}
+  @media (max-width:640px){
+    #toolbar{top:104px;right:16px;gap:6px}
+    #toolbar button{padding:7px 11px;font-size:11.5px}
   }
-  #soundBtn:hover{color:var(--amber);border-color:var(--amber)}
-  #soundBtn.on{color:var(--amber);border-color:var(--amber)}
-  @media (max-width:640px){ #soundBtn{top:148px;right:16px} }
-  /* 一键收起：互动指南 + 状态栏（按钮放在标题下方） */
-  #hideChromeBtn{
-    margin-top:10px;z-index:6;pointer-events:auto;cursor:pointer;display:inline-block;
-    font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--dim);
-    background:rgba(20,16,14,.55);border:1px solid var(--line);border-radius:30px;
-    padding:7px 14px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
-  }
-  #hideChromeBtn:hover{color:var(--amber);border-color:var(--amber)}
-  #hideChromeBtn.on{color:var(--amber);border-color:var(--amber)}
   body.chromeHidden #guide{display:none!important}
-  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 12px}
-  header .brk{flex-basis:100%;height:0}
-  header #hideChromeBtn{flex:0 0 auto;align-self:flex-start}
+  /* 收起面板时：左下状态栏收成一条小字 */
+  body.chromeHidden #panel{min-width:0!important;padding:6px 26px 6px 10px!important}
+  body.chromeHidden #panel .row{display:none!important}
+  body.chromeHidden #panel .mini{display:inline!important}
+  body.chromeHidden #panelToggle{display:none}
   /* 标定遮罩 */
   #calibOverlay{
     display:none;position:fixed;inset:0;z-index:20;
@@ -200,11 +192,11 @@
     color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:30px;padding:9px 22px;
   }
   #calibSkip:hover{color:var(--amber);border-color:var(--amber)}
-  @media (max-width:640px){ #calibBtn{top:104px;right:16px} #calibInfo{bottom:40px} }
+  @media (max-width:640px){ #calibBtn{top:118px;left:16px} #calibInfo{bottom:40px} }
 
   /* 互动指南：可折叠浮层，方便测试时查看各种互动方式 */
   #guide{
-    position:fixed;top:158px;right:26px;z-index:7;width:248px;
+    position:fixed;top:126px;right:26px;z-index:7;width:248px;
     border:1px solid var(--line);border-radius:12px;
     background:rgba(20,16,14,.72);backdrop-filter:blur(8px);
     font-size:12.5px;line-height:1.55;overflow:hidden;
@@ -225,7 +217,7 @@
   #guideBody li::before{content:"";position:absolute;left:0;top:7px;width:4px;height:4px;border-radius:50%;background:var(--amber)}
   #guideBody li b{color:var(--warm-white);font-weight:600}
   @media (max-width:640px){
-    #guide{top:186px;right:16px;width:218px;font-size:12px}
+    #guide{top:152px;right:16px;width:218px;font-size:12px}
   }
   @media (max-width:640px){
     header{padding:16px 18px}
@@ -244,16 +236,14 @@
 <header>
   <h1>网页猫猫</h1>
   <span class="sub">本地识别 · 画面不上传</span>
-  <span class="brk"></span>
-  <button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与左下角状态栏（H 键）">收起面板</button>
 </header>
 
 <div id="inputToggle" role="group" aria-label="输入模式切换">
   <button id="modeCam" class="on" type="button">看猫猫</button>
   <button id="modeMouse" type="button">逗猫棒</button>
 </div>
-<button id="calibBtn" type="button" title="视线标定：按 9 个点依次注视摄像头，校准猫咪的注视方向；不想标定可直接跳过
-（快捷键 C）">视线标定 <span style="opacity:.65;font-size:11px">ⓘ</span></button>
+<div id="toolbar">
+  <button id="calibBtn" type="button" title="视线标定：按 9 个点依次注视摄像头，校准猫咪的注视方向；不想标定可直接跳过（快捷键 C）">视线标定</button>
 <button id="soundBtn" class="on" type="button" aria-label="背景音乐开关" aria-pressed="true" title="背景音乐开关（呼噜声自动播放）">
   <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
     <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
@@ -262,6 +252,8 @@
   </svg>
   <span id="soundLabel">音乐开</span>
 </button>
+  <button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与左下角状态栏（H 键）">收起面板</button>
+</div>
 
 <svg id="wand" aria-hidden="true">
   <defs>
@@ -453,7 +445,7 @@ window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
-const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=2.68, SNIFF_HOLD=2.0, SNIFF_BACK=2.5;    // 走近/退回再慢 30%   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
+const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=3.10, SNIFF_HOLD=3.0, SNIFF_BACK=2.5;    // 走近更慢；嗅闻 +1s（节奏不变）   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -1693,7 +1685,7 @@ function updateActions(t, dt){
   const _f=STATE.face;
   if(_f && _f.active && (_f.smile||0)>SMILE_THRESH) STATE._smileT=(STATE._smileT||0)+dt;
   else STATE._smileT=0;
-  if(STATE._smileT>.5 && STATE.sniffCool<=0 && STATE.top==='engaged'
+  if(STATE._smileT>.35 && STATE.sniffCool<=0 && STATE.top==='engaged'
      && STATE.action==='idle' && STATE.hasJoined){
     STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=9; STATE._smileT=0;
   }
