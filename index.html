@@ -273,7 +273,7 @@
       <li><b>移开 / 离开</b>：猫咪警觉，瞳孔随之变化</li>
       <li><b>眨眼</b>：猫咪回你一个慢眨眼</li>
       <li><b>转头（左/右）</b>：猫咪目光朝同侧轻瞥</li>
-      <li><b>点头</b>：猫咪开心、耳朵前送、轻眯眼</li>
+      <li><b>点头</b>：猫咪会跟着你一起点头（上下回应）</li>
       <li><b>摇头</b>：猫咪好奇地抖耳、轻瞟</li>
     </ul>
     <h4>看猫猫模式 · 手势</h4>
@@ -292,7 +292,7 @@
     <ul>
       <li><b>右上角</b>可随时切换看猫猫 / 逗猫棒</li>
       <li><b>视线标定</b>：9 点标定提升注视精度，可跳过</li>
-      <li><b>无人时</b>：猫咪自主坐着、伸懒腰、踩奶、交替抬腿、抖毛</li>
+      <li><b>无人时</b>：猫咪自主坐着、伸懒腰、踩奶、抖毛</li>
     </ul>
   </div>
 </div>
@@ -393,7 +393,7 @@ const STATE = {
   kiss:{active:false, t:0, gaze:0, cool:0},  // 对视触发的慢眨眼（猫咪之吻）
   pupil:0,                // 瞳孔放大程度 0-1 平滑
   // 第八档：活动状态机与表情
-  action:'idle',          // idle / walkIn / stretch / knead / pawplay / shake / sit / notice / pounce
+  action:'idle',          // idle / walkIn / stretch / knead / shake / sit / notice / pounce / hop
   actionT:0,              // 当前动作计时
   actionCool:1.5,         // 自主活动间隔（开局很快开始走动）
   walkPhase:0,            // 四腿步态相位
@@ -427,6 +427,10 @@ window.STATE = STATE;
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.12, WALK_SPD=.045;   // 慢速走出树洞；定点贴近屏幕
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
+const ST_DUR=3.4;                             // 伸懒腰总时长（关键帧包络都用它）
+const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
+// 平滑"起-保持-收"包络：t0→t1 上升、t1→t2 保持、t2→t3 回落
+const plateauEnvelope=(t,t0,t1,t2,t3)=>smoothSt((t-t0)/(t1-t0))*(1-smoothSt((t-t2)/(t3-t2)));
 // 开场固定从正上方（x=0）直直走过来，不再随机三起点
 STATE.moveX=0; STATE.moveZ=FAR_Z;
 // 进入主界面之前先在远处静立等待，不自动走；gate 关闭（摄像头/鼠标进入）后才触发 walkIn
@@ -1272,7 +1276,7 @@ function clampFootToGround(b, groundY){
 }
 
 /* ---- 状态文字：蹲伏/惊讶优先，其余用动作中文名 ---- */
-const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',pawplay:'抬爪玩',hop:'蹦跳',
+const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',hop:'蹦跳',
                      pounce:'扑玩',sit:'坐着',shake:'抖毛',notice:'发现你了'};
 function updateMoodLabel(c){
   let mood;
@@ -1504,13 +1508,16 @@ function updateActions(t, dt){
     }
   }
   if(fgEv.turn!==rp._last.turn){ rp._last.turn=fgEv.turn; rp.turn=1; rp.turnSide=fgEv.turnSide; }
-  if(fgEv.nod!==rp._last.nod){ rp._last.nod=fgEv.nod; rp.nod=1; }
+  if(fgEv.nod!==rp._last.nod){ rp._last.nod=fgEv.nod; rp.nod=1; rp.nodT=0; }   // 记录时间轴：猫跟着点一下
   if(fgEv.shake!==rp._last.shake){ rp._last.shake=fgEv.shake; rp.shake=1; rp.shakeSide=fgEv.turnSide||rp.shakeSide; }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
   rp.turn=damp(rp.turn,0,3,dt);
   rp.nod=damp(rp.nod,0,2.6,dt);
   rp.shake=damp(rp.shake,0,3.2,dt);
+  // 跟着点头：一次点头约 0.62s，先下后上（与用户点头同拍）
+  rp.nodT=(rp.nodT===undefined?99:rp.nodT)+dt;
+  const nodAnim = rp.nodT<0.62 ? -0.26*Math.sin(Math.PI*rp.nodT/0.62) : 0;
   // 目光：转头→朝同侧轻瞥；摇头→好奇地向一侧轻瞟
   STATE.target.x+=rp.turnSide*rp.turn*.12 + rp.shakeSide*rp.shake*.2;
 
@@ -1548,7 +1555,7 @@ function updateActions(t, dt){
   let stretchSquint=0;
   if(STATE.action==='stretch'){
     const _at=STATE.actionT;
-    stretchSquint=clamp01((_at-.5)/.5)*clamp01((2.6-_at)/.5);
+    stretchSquint=clamp01((_at-.7)/.6)*clamp01((3.3-_at)/.6);
   }
   // 一般表情封顶 .85 保留细缝；伸懒腰时用户要求完全闭紧，单独放宽到 .96
   const eyeClose=Math.min(STATE.action==='stretch'?.96:.85,
@@ -1606,7 +1613,7 @@ function updateActions(t, dt){
   // 情绪反应量：开心（微笑/剪刀手）、惊讶（张嘴）
   const gNow = STATE.hand && STATE.hand.active ? STATE.hand.gesture : null;
   // 微笑增益提高（*20），轻微嘴角上扬即可开心；点头也算友好
-  STATE.happy = damp(STATE.happy, Math.min(1,Math.max(STATE.expr.smile*20,gNow==='peace'?1:0,STATE.fgResp.nod*.8)), 5, dt);
+  STATE.happy = damp(STATE.happy, Math.min(1,Math.max(STATE.expr.smile*20,gNow==='peace'?1:0,STATE.fgResp.nod*.35)), 5, dt);
   STATE.startle = damp(STATE.startle, STATE.expr.mouth>.10?1:0, 7, dt);
 
   // ===== 5) 动作选择：自主小动作 / 互动触发（pinch、点击、指向）=====
@@ -1653,16 +1660,14 @@ function updateActions(t, dt){
       const busy=STATE.pawLift.L>.05||STATE.pawLift.R>.05||STATE.mutual.active;
       if(STATE.actionCool<=0 && !busy){
         const r=Math.random();
-        if(r<.22){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;}
-        else if(r<.40){STATE.action='knead';STATE.actionT=0;}
-        else if(r<.55){STATE.action='pawplay';STATE.actionT=0;}
-        else if(r<.68){STATE.action='shake';STATE.actionT=0;
+        if(r<.28){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;}
+        else if(r<.55){STATE.action='knead';STATE.actionT=0;}
+        else if(r<.75){STATE.action='shake';STATE.actionT=0;
           STATE.shakeAmp=.55+Math.random()*.45;STATE.shakeDur=.6+Math.random()*.35;}
         else {STATE.action='sit';STATE.actionT=0;STATE.actionDur=4+Math.random()*2.5;}
       }
-    } else if(STATE.action==='stretch'){ if(STATE.actionT>=2.6) toIdle(); }
+    } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
     else if(STATE.action==='knead'){ if(STATE.actionT>=3.2) toIdle(); }
-    else if(STATE.action==='pawplay'){ if(STATE.actionT>=2.4) toIdle(); }
     else if(STATE.action==='shake'){ if(STATE.actionT>=STATE.shakeDur) toIdle(); }
     else if(STATE.action==='sit'){
       if(STATE.actionT>=STATE.actionDur){ toIdle(); }
@@ -1754,11 +1759,13 @@ function updateActions(t, dt){
     if(tt>=HOP_D){ STATE.moveX=0; STATE._hopY=0; toIdle(); }
   }
   const at=STATE.actionT;
-  // 伸懒腰包络：stReach=前伸、stArch=弓背；全程共用一份（原代码在三处重复计算）
-  let stReach=0, stArch=0;
+  // 伸懒腰包络：3.4s，四个平滑段（起 → 前伸 → 弓背保持 → 收），全部用 smoothstep
+  // 旧版是两段 clip 线性叠加，起收都带折角，看起来"弹"——这是不自然的根源
+  let stReach=0, stArch=0, stHeadK=0;
   if(act==='stretch'){
-    stReach=clamp01(at/.6)*clamp01((2.6-at)/.5);           // 前伸段（0-.6 起，2.1-2.6 收）
-    stArch=clamp01((at-.6)/.6)*clamp01((2.6-at)/.6);       // 弓背段（.6-1.2 起，2.0-2.6 收）
+    stReach=plateauEnvelope(at, 0,   .80, 2.00, 3.30);   // 前腿送出（先到、先保持）
+    stArch =plateauEnvelope(at, .25, 1.25, 2.20, 3.30);  // 弓背（稍晚跟上）
+    stHeadK=plateauEnvelope(at, .45, 1.45, 2.30, 3.30);  // 抬头（再晚一点，形成波浪）
   }
   let moving=0;
   if(act==='walkIn'){ moving=1; }
@@ -1821,12 +1828,12 @@ const D=.09*c + .032*s;
   const swayLat=.002*Math.sin(GAIT.phi*Math.PI*2)*gw;
   let stDip=0, stYaw=0, stPitch=0;
   if(act==='stretch'){
-    stDip=.016*stArch;
+    stDip=.018*stArch;
     // 随机向左/右小幅转约10°再伸懒腰；快速转到位，结束前慢慢转回（回正更缓）
     const sIn=clamp01(at/.7), sOut=1-clamp01((at-1.7)/.9);
     stYaw=(STATE.stretchSide||1)*(Math.PI/18)*Math.min(sIn,sOut);
     // 祝祷式：身体前倾（前低后高），峰值在中段，配合前伸/弓背
-    stPitch=.18*clamp01(at/.7)*clamp01((2.6-at)/.6); }
+    stPitch=.20*plateauEnvelope(at,.30,1.15,2.15,3.30); }
   rig.root.position.set(
     STATE.moveX + swayLat*Math.cos(GAIT.yaw),
     -D+bob-GAIT.turnDip-stDip+breathY+STATE._hopY,
@@ -1880,11 +1887,6 @@ const D=.09*c + .032*s;
     const kp=at*5;
     P.paw2_R+=Math.sin(kp)*.22;        P.paw2_L+=Math.sin(kp+Math.PI)*.22;
     P.paw1_R+=Math.sin(kp)*.1;         P.paw1_L+=Math.sin(kp+Math.PI)*.1;
-  }
-  if(act==='pawplay'){  // 自主交替抬腿：肩肘轻屈、腿顺势抬起（收小屈曲，避免折进胸口重叠）
-    const seg=at/1.2, which=Math.floor(seg), env=Math.sin(Math.PI*(seg-which));
-    if(which===0){ P.paw1_R+=-.35*env; P.paw2_R+=-.25*env; }
-    else { P.paw1_L+=-.35*env; P.paw2_L+=-.25*env; }
   }
   if(act==='pounce'){  // 扑玩：蹲伏蓄力平滑压低，前扑/落地保持，退步时缓抬
     const sm=k=>k*k*(3-2*k);
@@ -1965,26 +1967,14 @@ const D=.09*c + .032*s;
     kneadLift.R=Math.max(0,Math.sin(kp));
     kneadLift.L=Math.max(0,Math.sin(kp+Math.PI));
   }
-  // 自主交替抬腿：两前爪轮流抬起（每 1.2s 换一只），可爱小动作
-  const autoLift={R:0,L:0};
-  if(act==='pawplay'){
-    const seg=at/1.2, which=Math.floor(seg), env=Math.sin(Math.PI*(seg-which));
-    if(which===0) autoLift.R=env; else autoLift.L=env;
-  }
   const posePaw=(ctrlName,endName,lift)=>{
     const b=rig.bones[ctrlName];
     // 抬爪时不钉地（走下面的腕部吸附）；否则用与后腿相同的 footBase 摆放
     if(lift<=.001 && footBase(b,ctrlName,GAIT_POSE[ctrlName],1,true)) return;
     const kL=ctrlName.endsWith('_R')?kneadLift.R:kneadLift.L;
-    const aL=ctrlName.endsWith('_R')?autoLift.R:autoLift.L;
     if(kL>.001){            // 踩奶：前爪抬起、略前送，不钉地
       b.position.y+=.022*kL;
       b.position.z+=.012*kL;
-    }
-    if(aL>.001){            // 自主抬腿：前爪抬起、向前送离胸口，掌向轻转（避免折进身体）
-      b.position.y+=.034*aL;
-      b.position.z+=.024*aL;
-      b.quaternion.multiply(_AB_Q.setFromEuler(_AB_E.set(-.18*aL,0,0)));
     }
     if(lift>0.001){
       const endBone=rig.bones[endName];
@@ -1996,7 +1986,7 @@ const D=.09*c + .032*s;
       b.quaternion.copy(rig.base[ctrlName])
         .multiply(_AB_Q.setFromEuler(_AB_E.set(-1.25*lift,0,0)));
     }
-    if(lift<=.001 && kL<=.001 && aL<=.001) clampFootToGround(b, groundY);   // 抬爪/踩奶/自主抬腿时脚在半空，不钳制
+    if(lift<=.001 && kL<=.001) clampFootToGround(b, groundY);   // 抬爪/踩奶时脚在半空，不钳制
   };
   posePaw('paw_control_R','paw2_R', STATE.pawLift.L);
   posePaw('paw_control_L','paw2_L', STATE.pawLift.R);
@@ -2010,7 +2000,7 @@ const D=.09*c + .032*s;
     sA=-.16*stReach-.26*stArch;            // 胸段下压收小，避免宽胸压到肩/腿根造成穿插
     // 头部独立修正：整个头部轻微抬起、猫脸向上（真猫伸懒腰常闭眼享受），彻底离开肩窝/胸前不穿模；
     // 前伸与弓背阶段都保持抬头，弓背略强
-    stHead=.46*stReach+.98*stArch;
+    stHead=.34*stReach+1.02*stHeadK+.22*stArch;   // 抬头跟随更晚的关键帧，头部走波浪而不是直线拉升
     // 胸口随动作收窄：前伸与弓背都保持，弓背略强，clamp 到 1
     if(rig.earMat.userData.shader)
       rig.earMat.userData.shader.uniforms.uStretch.value=Math.min(1, stReach+.35*stArch);
@@ -2044,7 +2034,7 @@ const D=.09*c + .032*s;
   const headBend = GAIT.bend*.5*(1-_tight);
   spineRot('Bone001', -.10, -.18, GAIT.spineLead+GAIT.bend*.15, sA*.5, 0, 0,    0,   .034);
   spineRot('Bone002', -.20, 0,    GAIT.bend*.35, sA*.55, 1, .12, .5,  .03);
-  spineRot('Bone004', -.16, 0,    GAIT.headLead+headBend, sA*.15+stHead, 2, .24, .5, .014);
+  spineRot('Bone004', -.16, 0,    GAIT.headLead+headBend, sA*.15+stHead+nodAnim, 2, .24, .5, .014);
   // 抖毛/哆嗦：高频快速抖动，幅度小、时间短；头部最明显，身体递减
   let shYaw=0,shRoll=0,shPitch=0,shRoot=0;
   if(act==='shake'){
@@ -2551,7 +2541,8 @@ function detectFaceGestures(fl, nowSec){
   faceGestDet.coolNod=Math.max(0,faceGestDet.coolNod-ddt);
   faceGestDet.coolShake=Math.max(0,faceGestDet.coolShake-ddt);
   // 点头：一次向下往返即算（need=1），门槛 .12 更灵敏；摇头：左右各一次完整往返（need=2）
-  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.12,1.4,1)){ out.nod=true; faceGestDet.coolNod=1.4; }
+  // 点头：门槛 .09（原来 .12，轻微点头也能中）、窗口 1.6s、冷却 1.0s（可以连着跟点）
+  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.09,1.6,1)){ out.nod=true; faceGestDet.coolNod=1.0; }
   if(faceGestDet.coolShake<=0 && excFeed(hx,faceGestDet.excX,nowSec,.18,1.4,2)){ out.shake=true; faceGestDet.coolShake=1.4; }
   return out;
 }
