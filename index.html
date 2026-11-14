@@ -2348,21 +2348,17 @@ const D=.09*c + .032*s;
       b1.updateWorldMatrix(true,false);
       alignBone(b2,t2);
       bc.position.copy(bc.parent.worldToLocal(W.clone()));
-      // 掌姿态：直接解析构造正交基（+Z 朝天、+X 沿前臂水平投影），
-      // 不依赖 atan2 的翻转判断，任何角度都不会扭/翻；再用 stReach 与静止姿态插值，起手无跳变
+      // 掌姿态：只做"最短弧放平"——把掌背（本地 +Z）以最小旋转转到朝上。
+      // 不做整基构造、不引入任何绕前臂轴的滚转，因此不会扭、不会翻；再按 stReach 与自身姿态插值。
       {
         bc.updateWorldMatrix(true,false);
-        const foreW=W.clone().sub(E).normalize();                       // 前臂方向（世界）
-        const fwd=foreW.clone().addScaledVector(UP,-foreW.dot(UP));     // 水平投影
-        if(fwd.lengthSq()<1e-6) fwd.copy(F); else fwd.normalize();
-        const yAx=new THREE.Vector3().crossVectors(UP,fwd).normalize(); // 右手系：x×y=z
-        const basis=new THREE.Matrix4().makeBasis(fwd,yAx,UP.clone());
-        const wQT=new THREE.Quaternion().setFromRotationMatrix(basis);
-        // 静止姿态（把 base 旋到世界）作为插值起点
         const parW=bc.parent.getWorldQuaternion(new THREE.Quaternion());
-        const wQBase=parW.clone().multiply(rig.base[bc.name]||new THREE.Quaternion());
+        const wQCur=bc.getWorldQuaternion(new THREE.Quaternion());
+        const backAx=new THREE.Vector3(0,0,1).applyQuaternion(wQCur).normalize();
+        const wQT=wQCur.clone().premultiply(
+          new THREE.Quaternion().setFromUnitVectors(backAx, UP.clone()));   // 最短弧：掌背朝天
         const k=Math.min(1,stReach*2.5);
-        const wQ=wQBase.clone().slerp(wQT,k);
+        const wQ=wQCur.clone().slerp(wQT,k);
         bc.quaternion.copy(parW.invert().multiply(wQ));
       }
     };
