@@ -423,7 +423,7 @@ window.STATE = STATE;
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
-const ST_DUR=3.4;                             // 伸懒腰总时长（关键帧包络都用它）
+const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
 // 平滑"起-保持-收"包络：t0→t1 上升、t1→t2 保持、t2→t3 回落
 const plateauEnvelope=(t,t0,t1,t2,t3)=>smoothSt((t-t0)/(t1-t0))*(1-smoothSt((t-t2)/(t3-t2)));
@@ -991,11 +991,12 @@ function loadCat(b64){
       sh.uniforms.uCapH={value:.5};
       sh.uniforms.uSquint={value:0};
       sh.uniforms.uLower={value:0};
+      sh.uniforms.uLidTilt={value:0};   // 眼睑倾斜：眯/闭眼时内角低、外角高（倒八字）
       sh.uniforms.uGaze={value:new THREE.Vector2(0,0)};
       sh.vertexShader='varying vec3 vEyeRel;\n'+sh.vertexShader
         .replace('#include <project_vertex>',
           '#include <project_vertex>\n vEyeRel=(modelViewMatrix*vec4(position,0.0)).xyz;');
-      sh.fragmentShader='uniform float uPupil; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform vec2 uGaze;\n'
+      sh.fragmentShader='uniform float uPupil; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform float uLidTilt; uniform vec2 uGaze;\n'
         +'varying vec3 vEyeRel;\n'
         +sh.fragmentShader
         .replace('#include <clipping_planes_fragment>',
@@ -1014,7 +1015,9 @@ function loadCat(b64){
           '  // 完整闭合：上下缘都收到 0 时整片丢弃，不留细缝\n'+
           '  if(upperH<=0.0 && lowerH<=0.0){discard;}\n'+
           '  float aa=clamp(fwidth(vEyeRel.y),0.00005,0.0004);\n'+
-          '  if(rel.y>upperH+aa || rel.y<-lowerH-aa){discard;}\n'+
+          '  // 眼睑整线倾斜：内眼角低、外眼角高 → 眯眼呈倒八字\n'+
+          '  float tiltOff=uLidTilt*nx*0.0021;\n'+
+          '  if(rel.y>upperH+tiltOff+aa || rel.y<-lowerH+tiltOff-aa){discard;}\n'+
           '}\n')
         .replace('#include <map_fragment>',
         '#include <map_fragment>\n'+
@@ -1215,6 +1218,7 @@ const _SW_QY=new THREE.Quaternion(), _SW_QP=new THREE.Quaternion(), _SW_QR=new T
 const _AX_Y=new THREE.Vector3(0,1,0), _AX_X=new THREE.Vector3(1,0,0), _AX_Z=new THREE.Vector3(0,0,1);
 const _EY_QH=new THREE.Quaternion(), _EY_DQ=new THREE.Quaternion(),
       _EY_QY=new THREE.Quaternion(), _EY_QP=new THREE.Quaternion();
+const _EY_TP=new THREE.Vector3(), _EY_TH=new THREE.Vector3();
 const _WC_A=new THREE.Quaternion(), _WC_B=new THREE.Quaternion(), _WC_RQ=new THREE.Quaternion(),
       _WC_CQ=new THREE.Quaternion(), _WC_E=new THREE.Euler();
 const _PP_Q=new THREE.Quaternion(), _PP_W=new THREE.Vector3(), _PP_L=new THREE.Vector3(), _PP_E=new THREE.Vector3();
@@ -1625,7 +1629,7 @@ function updateActions(t, dt){
   let stretchSquint=0;
   if(STATE.action==='stretch'){
     const _at=STATE.actionT;
-    stretchSquint=clamp01((_at-.7)/.6)*clamp01((3.3-_at)/.6);
+    stretchSquint=clamp01((_at-.8)/.6)*clamp01((3.6-_at)/.6);
   }
   // 一般表情封顶 .85 保留细缝；伸懒腰时用户要求完全闭紧，单独放宽到 .96
   const eyeClose=Math.min(STATE.action==='stretch'?.96:.85,
@@ -1661,6 +1665,10 @@ function updateActions(t, dt){
         un.uPupil.value=STATE.pupil;
         un.uSquint.value=eyeClose;
         un.uLower.value=STATE._lowerOpen;
+        // 内眼角朝头中心：屏幕右侧的眼，内角在 -x，因此倾斜符号取"眼相对头的位置"同号
+        e.group.getWorldPosition(_EY_TP);
+        rig.bones.Bone004.getWorldPosition(_EY_TH);
+        un.uLidTilt.value=(_EY_TP.x>_EY_TH.x?1:-1)*eyeClose;
         // 注视方向归一（与 yaw/pitch 同口径），驱动虹膜窗口平移
         un.uGaze.value.set(THREE.MathUtils.clamp(yaw/.5,-1,1), THREE.MathUtils.clamp(pitch/.5,-1,1));
       }
@@ -1716,7 +1724,7 @@ function updateActions(t, dt){
         if(r<.28){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;}
         else if(r<.55){STATE.action='knead';STATE.actionT=0;}
         else if(r<.75){STATE.action='shake';STATE.actionT=0;
-          STATE.shakeAmp=.55+Math.random()*.45;STATE.shakeDur=.6+Math.random()*.35;}
+          STATE.shakeAmp=.85+Math.random()*.15;STATE.shakeDur=.95+Math.random()*.3;}
         else {STATE.action='sit';STATE.actionT=0;STATE.actionDur=4+Math.random()*2.5;}
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
@@ -1757,7 +1765,14 @@ function updateActions(t, dt){
     }
     wantTail=tailPoseState.name;
   }
-  const pose=TAIL_POSES[wantTail];
+  const stUp=STATE._stTailUp||0;
+  const CURL=[.34,.50,.60,.56,.44];   // 伸懒腰：尾巴翘高后向前卷成问号形
+  let pose=TAIL_POSES[wantTail];
+  if(stUp>.01){
+    const up=TAIL_POSES.upright;
+    pose={lift:pose.lift.map((v,i)=>{ const tgt=Math.max(up.lift[i],CURL[i]); return v+(tgt-v)*stUp; }),
+          swayK:pose.swayK+(up.swayK-pose.swayK)*stUp};
+  }
   for(let i=0;i<5;i++) tailPoseState.cur[i]=damp(tailPoseState.cur[i],pose.lift[i],3,dt);
   tailPoseState.swayK=damp(tailPoseState.swayK,pose.swayK,3,dt);
 
@@ -1819,11 +1834,10 @@ function updateActions(t, dt){
   const at=STATE.actionT;
   // 伸懒腰包络：3.4s，四个平滑段（起 → 前伸 → 弓背保持 → 收），全部用 smoothstep
   // 旧版是两段 clip 线性叠加，起收都带折角，看起来"弹"——这是不自然的根源
-  let stReach=0, stArch=0, stHeadK=0;
+  let stReach=0, stArch=0;
   if(act==='stretch'){
-    stReach=plateauEnvelope(at, 0,   .80, 2.00, 3.30);   // 前腿送出（先到、先保持）
-    stArch =plateauEnvelope(at, .25, 1.25, 2.20, 3.30);  // 弓背（稍晚跟上）
-    stHeadK=plateauEnvelope(at, .45, 1.45, 2.30, 3.30);  // 抬头（再晚一点，形成波浪）
+    stReach=plateauEnvelope(at, 0,   .75, 2.75, 3.70);   // 前腿送出（实测 0.75s 到位）
+    stArch =plateauEnvelope(at, .20, 1.05, 2.75, 3.70);  // 胸腔下沉（实测约 0.3s 后跟上）
   }
   let moving=0;
   if(act==='walkIn'){ moving=1; }
@@ -1893,7 +1907,7 @@ const D=.09*c + .032*s;
     const sIn=clamp01(at/.7), sOut=1-clamp01((at-1.7)/.9);
     stYaw=(STATE.stretchSide||1)*(Math.PI/18)*Math.min(sIn,sOut);
     // 祝祷式：身体前倾（前低后高），峰值在中段，配合前伸/弓背
-    stPitch=.20*plateauEnvelope(at,.30,1.15,2.15,3.30); }
+    stPitch=.34*plateauEnvelope(at,.30,1.05,2.75,3.60); }    // 整身前倾约 19°：脊柱与前腿连成一条斜线（弧线）
   rig.root.position.set(
     STATE.moveX + swayLat*Math.cos(GAIT.yaw),
     -D+bob-GAIT.turnDip-stDip+breathY+STATE._hopY,
@@ -1940,8 +1954,8 @@ const D=.09*c + .032*s;
   });
   if(act==='stretch'){  // 伸懒腰：先两前爪向前伸，再弓背；后腿后蹬
     // 前腿（肩/肘/掌）由后面的解析 IK 驱动，此处不加局部角；后腿后蹬保留
-    P.leg2_R-=.30*stArch;P.leg2_L-=.30*stArch;               // 后腿后蹬
-    P.leg1_R+=.16*stArch;P.leg1_L+=.16*stArch;
+    P.leg2_R-=.05*stArch;P.leg2_L-=.05*stArch;               // 实测后腿基本踩地不动
+    P.leg1_R+=.03*stArch;P.leg1_L+=.03*stArch;
   }
   if(act==='knead'){  // 踩奶：两前爪交替抬踏（幅度加大，肩肘配合）
     const kp=at*5;
@@ -2020,6 +2034,7 @@ const D=.09*c + .032*s;
   // 同时绕 X 负向旋转控制骨，把掌心（本地 -Z）转向镜头，举掌对人。
   // 伸懒腰前掌前送量（控制骨实际前移，配合 FK 肩肘旋转），沿用上方共用的 stReach/stArch
   STATE._stReach=stReach;   // 供渲染循环驱动伸懒腰呼噜
+  STATE._stTailUp=stReach;  // 伸懒腰时尾巴翘高（供尾巴姿态使用）
   // 踩奶：两前爪交替抬起（控制骨实际离地再下压），让动作清晰可见
   const kneadLift={R:0,L:0};
   if(act==='knead'){
@@ -2057,10 +2072,10 @@ const D=.09*c + .032*s;
   const _sh0=rig.earMat.userData.shader;
   if(_sh0) _sh0.uniforms.uStretch.value=0;
   if(act==='stretch'){
-    sA=-.16*stReach-.26*stArch;            // 胸段下压收小，避免宽胸压到肩/腿根造成穿插
+    sA=-.10*stReach-.06*stArch;            // 胸段下沉，配合整身前倾形成前低后高的反弓
     // 头部独立修正：整个头部轻微抬起、猫脸向上（真猫伸懒腰常闭眼享受），彻底离开肩窝/胸前不穿模；
     // 前伸与弓背阶段都保持抬头，弓背略强
-    stHead=.34*stReach+1.02*stHeadK+.22*stArch;   // 抬头跟随更晚的关键帧，头部走波浪而不是直线拉升
+    stHead=-.05*stReach;                   // 头部与躯干同向：只做极小补偿，不再单独摆头
     // 胸口随动作收窄：前伸与弓背都保持，弓背略强，clamp 到 1
     if(rig.earMat.userData.shader)
       rig.earMat.userData.shader.uniforms.uStretch.value=Math.min(1, stReach+.35*stArch);
@@ -2099,15 +2114,15 @@ const D=.09*c + .032*s;
   let shYaw=0,shRoll=0,shPitch=0,shRoot=0,shHeadYaw=0,shHeadRoll=0,shHeadPitch=0;
   if(act==='shake'){
     const dur=STATE.shakeDur||.8,amp=STATE.shakeAmp||1,env=Math.sin(Math.PI*Math.min(STATE.actionT/dur,1));
-    const w=Math.sin(STATE.actionT*Math.PI*2*9.5);
-    shYaw=w*.115*amp*env;                                  // 躯干左右抖（加强）
-    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.135*amp*env;
-    shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.022*amp*env;
-    shRoot=w*.08*amp*env;
-    // 头部：更高频、更小幅度地快速来回旋转（不是摇头晃脑）
-    shHeadYaw=Math.sin(STATE.actionT*Math.PI*2*15.5+0.7)*.035*amp*env;
-    shHeadRoll=Math.sin(STATE.actionT*Math.PI*2*15.5+2.4)*.045*amp*env;
-    shHeadPitch=Math.sin(STATE.actionT*Math.PI*2*13)*.02*amp*env;
+    // 参考视频实测：约 5.9Hz、持续约 1.1s，头部大幅左右快速甩动，躯干只小幅跟动
+    const SHK=5.9, w=Math.sin(STATE.actionT*Math.PI*2*SHK);
+    shHeadYaw=w*.42*amp*env;                               // 头部大幅甩动（主，较上一版 -32%）
+    shHeadRoll=Math.sin(STATE.actionT*Math.PI*2*SHK+2.0)*.105*amp*env;
+    shHeadPitch=Math.sin(STATE.actionT*Math.PI*2*SHK*.5)*.042*amp*env;
+    shYaw=w*.042*amp*env;                                  // 躯干小幅跟随
+    shRoll=Math.sin(STATE.actionT*Math.PI*2*SHK+1.2)*.035*amp*env;
+    shPitch=Math.sin(STATE.actionT*Math.PI*2*SHK*.7)*.010*amp*env;
+    shRoot=w*.021*amp*env;
     rig.root.rotation.z+=shRoot;
     rig.root.rotation.x+=shPitch*.5;
   }
@@ -2124,8 +2139,8 @@ const D=.09*c + .032*s;
       _SW_L.copy(qb).invert().multiply(_SW_W).multiply(qb);   // 世界摆动 → 该骨 rest 本地系
       bone.quaternion.multiply(_SW_L);
     };
-    applySway('Bone001',1.15);  // 下脊柱（腰胯）大幅抖
-    applySway('Bone002',1.45);  // 胸段主抖（加强）
+    applySway('Bone001',.60);   // 躯干只小幅跟动（实测身体几乎不动）
+    applySway('Bone002',.75);
     applySway('Bone004',1,shHeadYaw,shHeadPitch,shHeadRoll);   // 头部：快速小幅自身旋转
     // 尾巴也被甩起来
     if(rig.bones.tail1) rig.bones.tail1.quaternion.multiply(
@@ -2152,14 +2167,17 @@ const D=.09*c + .032*s;
       // 水平侧向轴（与前向 F 正交）；按肩实际所在侧定符号，保证两掌都向外分
       const LAT=new THREE.Vector3(Math.cos(stYaw),0,-Math.sin(stYaw));
       const sideSign=Math.sign(S.dot(LAT))||1;
-      const latSep=stReach*.0155;   // 每掌额外外分（前送变短后略加外分，避免两掌靠太近）
+      const latSep=stReach*.006;    // 只留很小外分：外分太大会让两骨不能完全伸直
       // 目标：从肩沿身体前向送出并向外分，掌落在地面并略微压下去（stReach 越大压得越低）
-      let W=S.clone().addScaledVector(F,stReach*.128).addScaledVector(LAT,sideSign*latSep);
-      W.y=groundY-.008*stReach;
+      // 前肢笔直：肩到地面高度 h、两骨总长 L，直腿能前伸的最大水平距离就是 sqrt(L²-h²)
+      const Ltot=(L1+L2)*.999, hgt=Math.max(.04,S.y-groundY);
+      const horiz=Math.sqrt(Math.max(0,Ltot*Ltot-hgt*hgt));
+      let W=S.clone().addScaledVector(F,horiz*stReach).addScaledVector(LAT,sideSign*latSep);
+      W.y=groundY+.002;   // 掌面平铺在地面上
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
       rel=rel.sub(lat);
-      const maxD=L1+L2-.002, minD=Math.abs(L1-L2)+.002;
+      const maxD=(L1+L2)*.9995, minD=Math.abs(L1-L2)+.002;   // 允许吃到满长 → 笔直
       const d=Math.max(minD,Math.min(rel.length(),maxD));
       rel.setLength(d);
       rel.addScaledVector(LAT,sideSign*latSep);   // 解完前向-竖直 IK 后加回外分量
