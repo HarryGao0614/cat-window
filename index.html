@@ -599,7 +599,7 @@ scene.add(ground);
   const STUMP={rTop:.42,rBot:.58,h:1.02,seg:48,zs:-.58};
   // 中央大入口：矩形+半圆拱（竖直段 RECT_H + 上半圆 ARCH_W），增高防穿模；挖洞 CUT_W 略大
   const SPRING_Y=.34, ARCH_W=.28, RECT_H=.30, CUT_W=.33;
-  const stumpGeo=new THREE.CylinderGeometry(STUMP.rTop,STUMP.rBot,STUMP.h,STUMP.seg,20);
+  const stumpGeo=new THREE.CylinderGeometry(STUMP.rTop,STUMP.rBot,STUMP.h,96,44);   // 加密：挖洞边缘的台阶减半，看着更顺
   const sp=stumpGeo.attributes.position,sv=new THREE.Vector3();
   for(let i=0;i<sp.count;i++){
     sv.fromBufferAttribute(sp,i);
