@@ -576,8 +576,29 @@ const appleSwingList=(()=>{
   const cushionMat=mat({color:0x9c7c5e,roughness:1});
   const creamMat=mat({color:0xefe6d2,roughness:.85});
   const redCapMat=mat({color:0xd92b2b,roughness:.55});
-  const appleMatA=mat({color:0xa8241c,roughness:.34});   // 苹果（深红，略亮）
-  const appleMatB=mat({color:0x8e2b18,roughness:.40});   // 苹果（偏赭红，做层次）
+  // 苹果表皮纹理：红色渐变 + 竖向条纹 + 细密斑点（程序化 canvas，无外部资源）
+  function appleCanvas(){
+    const cv=document.createElement('canvas'); cv.width=256; cv.height=256;
+    const x=cv.getContext('2d');
+    const g=x.createLinearGradient(0,0,0,256);
+    g.addColorStop(0,'#d1452f'); g.addColorStop(.45,'#b02b1e'); g.addColorStop(1,'#7d1a14');
+    x.fillStyle=g; x.fillRect(0,0,256,256);
+    for(let i=0;i<110;i++){
+      x.strokeStyle='rgba('+(Math.random()<.5?'255,205,180':'92,22,12')+','+rnd(.05,.15).toFixed(3)+')';
+      x.lineWidth=rnd(1,3); const px=rnd(0,256);
+      x.beginPath(); x.moveTo(px,0);
+      x.bezierCurveTo(px+rnd(-12,12),85,px+rnd(-12,12),170,px+rnd(-8,8),256); x.stroke();
+    }
+    for(let i=0;i<520;i++){
+      x.fillStyle='rgba(255,238,215,'+rnd(.03,.11).toFixed(3)+')';
+      x.beginPath(); x.arc(rnd(0,256),rnd(0,256),rnd(.6,1.9),0,6.283); x.fill();
+    }
+    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=4;
+    return t;
+  }
+  const appleTex=appleCanvas();
+  const appleMatA=mat({map:appleTex,color:0xffffff,roughness:.34});   // 苹果（带表皮纹理）
+  const appleMatB=mat({map:appleTex,color:0xd9b0a0,roughness:.42});   // 略暗一档，做层次
   const gillMat=mat({map:tex(gillC),roughness:.9});
   const dotMat=mat({color:0xf6f1e6,roughness:.7});
   const leafMat=mat({color:0x4f7a3c,roughness:.85,side:THREE.DoubleSide});
@@ -739,17 +760,15 @@ const appleSwingList=(()=>{
       putIn(parent,new THREE.SphereGeometry(.012*scale,8,6),dotMat,
         [capR*Math.sin(phi)*Math.cos(a),baseY+capR*Math.cos(phi),capR*Math.sin(phi)*Math.sin(a)]);}
   }
-  // 悬挂的苹果：绕挂点轻微摆动（钟摆），果身用旋转体轮廓，尺寸比上一版 +30%
+  // 悬挂的苹果：绕挂点轻微摆动（钟摆），果身用旋转体轮廓 + 表皮纹理
   const appleSwing=[];
   function placeApple(scale,x,y,z){
-    const R=.065*scale;                      // 比上一版（.050）大 30%
+    const R=.065*scale;
     const g=new THREE.Group();
-    g.position.set(x,1.06,z);                // 枢轴在挂点上，绕它摆动
+    g.position.set(x,1.06,z);
     const drop=1.06-y;
-    // 挂绳
     const str=new THREE.Mesh(new THREE.CylinderGeometry(.0036,.0036,drop,6),leafDarkMat);
     str.position.y=-drop/2; g.add(str);
-    // 果身：旋转体轮廓 + 5 瓣微起伏
     const prof=[[0,1.02],[.12,1.00],[.30,.98],[.55,.90],[.78,.72],[.94,.45],[1.00,.15],
                 [.97,-.12],[.88,-.42],[.70,-.68],[.45,-.86],[.18,-.94],[0,-.96]];
     const geo=new THREE.LatheGeometry(prof.map(([r,vy])=>new THREE.Vector2(r*R,vy*R)),28);
@@ -764,14 +783,11 @@ const appleSwingList=(()=>{
     body.position.y=-drop; body.castShadow=true; body.receiveShadow=true;
     body.rotation.set(.06*(Math.random()-.5),Math.random()*6.28,0);
     g.add(body);
-    // 果柄（从顶部凹窝斜出）
     const st=new THREE.Mesh(new THREE.CylinderGeometry(.0058,.0044,R*.5,7),rimWoodMat);
     st.position.set(0,-drop+R*.72,0); st.rotation.set(.18,0,.12); g.add(st);
-    // 叶子
     const lf=new THREE.Mesh(leafGeo,leafDarkMat);
     lf.position.set(R*.75,-drop+R*.80,R*.28); lf.rotation.set(.55,Math.random()*6.28,.85);
     lf.scale.set(.9,1.1,.9); g.add(lf);
-    // 摆动参数：频率/相位/幅度都随机，彼此不同步
     g.userData={w:.55+Math.random()*.45, p:Math.random()*6.28, a:.05+Math.random()*.045};
     forestGroup.add(g); appleSwing.push(g);
   }
@@ -780,8 +796,7 @@ const appleSwingList=(()=>{
     mushroom(scale,parent,hanging);
   }
   placeMush(1.3,-1.04,.0,.018);placeMush(.75,-.575,.0,.473);placeMush(1.1,.773,.0,.338);
-  // 天花上原本悬挂的 5 个毒蝇伞，按用户要求换成苹果（用果柄挂在树冠上）
-  // 高低错落：不同挂果高度（y = 果心高度）+ 不同大小，避免排成一条线
+  // 5 个苹果（高低错落）：挂在树冠下，绕挂点轻微摆动
   placeApple(1.05,-.45,.90,-.35);
   placeApple(.80,  .42,.99,-.25);
   placeApple(1.18,  .05,.86,-.50);
@@ -810,11 +825,13 @@ const appleSwingList=(()=>{
     for(let i=0;i<=5;i++){const t=i/5;
       pts.push(V(x+Math.sin(t*4)*.035,top-t*len,z+Math.cos(t*3)*.035));}
     put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),14,.006,6),leafDarkMat);
+    // 叶子：等距、左右交替、统一尺度与倾角（规整，不再随机乱转）
     for(let i=1;i<=4;i++){const t=i/5;
-      if(inTrunkBody(x+Math.sin(t*4)*.035, z+Math.cos(t*3)*.035, .04)) continue;   // 叶子不要长进树干
-      put(leafGeo,Math.random()<.5?leafMat:leafDarkMat,
-        [x+Math.sin(t*4)*.035+rnd(-.02,.02),top-t*len,z+Math.cos(t*3)*.035+rnd(-.02,.02)],
-        [rnd(0,3),rnd(0,3),rnd(0,3)]);}
+      if(inTrunkBody(x+Math.sin(t*4)*.035, z+Math.cos(t*3)*.035, .04)) continue;
+      const side2=(i%2)?1:-1;
+      put(leafGeo,(i%2)?leafMat:leafDarkMat,
+        [x+Math.sin(t*4)*.035+side2*.016, top-t*len, z+Math.cos(t*3)*.035],
+        [0, side2*.9, .55], [.9,.9,.9]);}
   }
   vine(-.45,-.6,.35);vine(.45,-.6,.38);vine(-1.1,-.2,.4);vine(1.1,-.2,.42);vine(0,-.7,.3);
 
@@ -826,22 +843,40 @@ const appleSwingList=(()=>{
     }
     const top=1.05;
     put(new THREE.CylinderGeometry(.004,.004,drop,5),leafDarkMat,[x,top-drop/2,z]);
-    for(let i=0;i<7;i++){const t=i/6;
-      { const fx=x+rnd(-.03,.03), fz=z+rnd(-.03,.03);
-        if(inTrunkBody(fx,fz,.04)) continue;                    // 花串不要垂进树干
-        put(new THREE.SphereGeometry(.018,8,7),flowerMats[i%flowerMats.length],
-          [fx,top-drop*t,fz],null,[1,1.4,1]); }}
+    // 花串：等距垂挂、自上而下略收，颜色按固定序列交替（规整）
+    for(let i=0;i<7;i++){
+      const t=i/6, taper=1-.28*t;
+      if(inTrunkBody(x,z,.04)) continue;                        // 花串不要垂进树干
+      put(new THREE.SphereGeometry(.018,10,8),flowerMats[i%flowerMats.length],
+        [x,top-drop*t,z],null,[taper,1.4*taper,taper]); }
   }
   wisteria(-.25,-.7,.4);wisteria(.28,-.7,.42);wisteria(.75,-.5,.38);wisteria(-.78,-.45,.36);
   wisteria(.5,-.62,.44);wisteria(-.55,-.58,.4);
 
   /* ---------- 针织蒲团 ---------- */
-  function pouf(x,z,s,col){
+  const kibbleMat=mat({color:0x6a4a2e,roughness:.85});
+  const waterMat=new THREE.MeshStandardMaterial({color:0x2f6f86,roughness:.08,metalness:.25,
+    polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});   // 不透明+偏移：避免透明排序/z-fight 导致"水消失"
+  const waterSurfs=[];
+  function pouf(x,z,s,col,fill){
     const pm2=mat({map:tex(knitCanvas(col)),roughness:1});
     put(new THREE.CylinderGeometry(.09*s,.1*s,.06*s,22),pm2,[x,.03*s,z]);
     put(new THREE.TorusGeometry(.085*s,.014*s,8,22),pm2,[x,.06*s,z],[Math.PI/2,0,0]);
+    if(fill==='food'){                       // 猫粮：碗心一小堆颗粒
+      for(let i=0;i<52;i++){
+        const a=rnd(0,Math.PI*2), rr=Math.sqrt(Math.random())*.062*s;
+        put(new THREE.SphereGeometry(rnd(.006,.010)*s,6,5),kibbleMat,
+          [x+Math.cos(a)*rr, .062*s+rnd(0,.008)*s, z+Math.sin(a)*rr]);
+      }
+    } else if(fill==='water'){               // 清水：碗口一层水面（会极缓慢起伏）
+      const wm=new THREE.Mesh(new THREE.CircleGeometry(.072*s,32),waterMat);
+      wm.frustumCulled=false;
+      wm.rotation.x=-Math.PI/2; wm.position.set(x,.0605*s,z); wm.renderOrder=1;
+      wm.userData={baseY:.0605*s};
+      forestGroup.add(wm); waterSurfs.push(wm);
+    }
   }
-  pouf(-.773,.338,.95,'#d8cbb6');pouf(.575,.473,.9,'#cbb392');pouf(1.04,.018,1,'#c98a78');
+  pouf(-.773,.338,.95,'#d8cbb6','food');pouf(.575,.473,.9,'#cbb392','water');pouf(1.04,.018,1,'#c98a78');
 
   /* ---------- 蕨类 ---------- */
   function fern(x,z,s){
@@ -886,12 +921,12 @@ const appleSwingList=(()=>{
     const mat=new THREE.ShaderMaterial({
       uniforms:{uTime:{value:0},uColor:{value:new THREE.Color(color)},uSize:{value:size}},
       vertexShader:'attribute float aPhase;uniform float uTime,uSize;varying float vA;'+
-        'void main(){vA=.4+.6*sin(uTime*1.7+aPhase*6.2831);'+
+        'void main(){vA=.72+.28*sin(uTime*1.7+aPhase*6.2831);'+
         'vec4 mv=modelViewMatrix*vec4(position,1.0);'+
-        'gl_PointSize=min(uSize*(240.0/max(.001,-mv.z)),40.0);gl_Position=projectionMatrix*mv;}',
+        'gl_PointSize=min(uSize*(240.0/max(.001,-mv.z)),64.0);gl_Position=projectionMatrix*mv;}',
       fragmentShader:'uniform vec3 uColor;varying float vA;'+
         'void main(){float r=length(gl_PointCoord-0.5);'+
-        'gl_FragColor=vec4(uColor,smoothstep(.5,0.0,r)*vA);}',
+        'gl_FragColor=vec4(uColor*1.6,smoothstep(.44,0.04,r)*vA);}',
       transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
     const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;
     pts.onBeforeRender=()=>{const t=performance.now()/1000;mat.uniforms.uTime.value=t;
@@ -911,7 +946,7 @@ const appleSwingList=(()=>{
       while(Math.hypot(x, z-STUMP.zs) < rAt(.55)+.14);
       pos[i*3]=x;pos[i*3+1]=rnd(.15,.85);pos[i*3+2]=z;ph[i]=Math.random();
     }
-    twinklePoints(pos,ph,0xd9ff8a,3.4,.06);
+    twinklePoints(pos,ph,0xe8ffa4,4.5,.06);   // 萤火虫：更大更亮（光点略收保证有核心）
   }
   // 月亮：夜空里的一轮冷白，带加性光晕
   {
@@ -934,7 +969,7 @@ const appleSwingList=(()=>{
       pos[i*3]=rnd(-2.3,2.3);pos[i*3+1]=rnd(.7,1.5);pos[i*3+2]=rnd(-2.4,-.7);ph[i]=Math.random();}
     twinklePoints(pos,ph,0xe6efff,2.4,0);
   }
-  return appleSwing;
+  return {apples:appleSwing, water:waterSurfs};
 })();
 
 
@@ -1694,7 +1729,7 @@ function updateActions(t, dt){
 
   // ===== 5) 动作选择：自主小动作 / 互动触发（pinch、点击、指向）=====
   // 动作切换助手
-  const toIdle=()=>{STATE.action='idle';STATE.actionT=0;STATE.actionCool=2.2+Math.random()*2.6;
+  const toIdle=()=>{STATE.action='idle';STATE.actionT=0;STATE.actionCool=.8+Math.random()*1.4;
                     resetStanceAnchors();};
   // 捏合 pinch / 鼠标点击扑玩：仅互动态生效；自由态/冷却期不响应
   const pinchNow = gNow==='pinch';
@@ -1721,11 +1756,11 @@ function updateActions(t, dt){
       const busy=STATE.pawLift.L>.05||STATE.pawLift.R>.05||STATE.mutual.active;
       if(STATE.actionCool<=0 && !busy){
         const r=Math.random();
-        if(r<.28){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;}
-        else if(r<.55){STATE.action='knead';STATE.actionT=0;}
-        else if(r<.75){STATE.action='shake';STATE.actionT=0;
+        if(r<.45){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;}   // 伸懒腰优先（45%）
+        else if(r<.68){STATE.action='knead';STATE.actionT=0;}
+        else if(r<.84){STATE.action='shake';STATE.actionT=0;
           STATE.shakeAmp=.85+Math.random()*.15;STATE.shakeDur=.95+Math.random()*.3;}
-        else {STATE.action='sit';STATE.actionT=0;STATE.actionDur=4+Math.random()*2.5;}
+        else {STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
     else if(STATE.action==='knead'){ if(STATE.actionT>=3.2) toIdle(); }
@@ -1766,7 +1801,7 @@ function updateActions(t, dt){
     wantTail=tailPoseState.name;
   }
   const stUp=STATE._stTailUp||0;
-  const CURL=[.34,.50,.60,.56,.44];   // 伸懒腰：尾巴翘高后向前卷成问号形
+  const CURL=[.40,.60,.74,.72,.58];   // 伸懒腰：尾巴翘高后向前卷成问号形（加强）
   let pose=TAIL_POSES[wantTail];
   if(stUp>.01){
     const up=TAIL_POSES.upright;
@@ -2028,6 +2063,19 @@ const D=.09*c + .032*s;
   ['leg3_control_R','leg3_control_L'].forEach(n=>{
     if(footBase(rig.bones[n],n,GAIT_POSE[n],.6,true)) return;
     clampFootToGround(rig.bones[n], groundY);
+    if(act==='stretch' && stReach>0){
+      // 伸懒腰：脚掌主动踩到地面（不再悬空），并让踝骨压平掌面
+      const b=rig.bones[n];
+      b.getWorldPosition(_FC_W);
+      _FC_W.y=groundY+.014;                       // 与常态着地高度一致
+      b.position.y=b.parent.worldToLocal(_FC_W.clone()).y;
+      const ank=rig.bones[n.replace('leg3_control','leg3')];
+      if(ank){
+        const pq=ank.parent.getWorldQuaternion(new THREE.Quaternion());
+        const tq=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-.10*stReach).multiply(pq);
+        ank.quaternion.copy(pq.invert().multiply(tq));
+      }
+    }
   });
   // 前爪控制骨：lift=0 随下沉钉地、姿态回 base；抬爪时把爪端 IK 目标吸附到主链真实腕部
   // （paw2 原点+其旋转×静止腕部偏移，而非 paw2 原点的肘关节），两链末端重合防蒙皮拉伸；
@@ -2075,7 +2123,7 @@ const D=.09*c + .032*s;
     sA=-.10*stReach-.06*stArch;            // 胸段下沉，配合整身前倾形成前低后高的反弓
     // 头部独立修正：整个头部轻微抬起、猫脸向上（真猫伸懒腰常闭眼享受），彻底离开肩窝/胸前不穿模；
     // 前伸与弓背阶段都保持抬头，弓背略强
-    stHead=-.05*stReach;                   // 头部与躯干同向：只做极小补偿，不再单独摆头
+    stHead=.09*stReach;                    // 头部随躯干同向，但略抬一点让脸离开前臂（防穿模）
     // 胸口随动作收窄：前伸与弓背都保持，弓背略强，clamp 到 1
     if(rig.earMat.userData.shader)
       rig.earMat.userData.shader.uniforms.uStretch.value=Math.min(1, stReach+.35*stArch);
@@ -2167,12 +2215,12 @@ const D=.09*c + .032*s;
       // 水平侧向轴（与前向 F 正交）；按肩实际所在侧定符号，保证两掌都向外分
       const LAT=new THREE.Vector3(Math.cos(stYaw),0,-Math.sin(stYaw));
       const sideSign=Math.sign(S.dot(LAT))||1;
-      const latSep=stReach*.006;    // 只留很小外分：外分太大会让两骨不能完全伸直
+      const latSep=stReach*.014;    // 前掌分得更开：前臂从头部两侧绕过，避免与前臂穿模
       // 目标：从肩沿身体前向送出并向外分，掌落在地面并略微压下去（stReach 越大压得越低）
-      // 前肢笔直：肩到地面高度 h、两骨总长 L，直腿能前伸的最大水平距离就是 sqrt(L²-h²)
+      // 前臂平铺：目标比"直腿最大前伸"更远一些，让肘部自然弯向地面、前臂贴地
       const Ltot=(L1+L2)*.999, hgt=Math.max(.04,S.y-groundY);
       const horiz=Math.sqrt(Math.max(0,Ltot*Ltot-hgt*hgt));
-      let W=S.clone().addScaledVector(F,horiz*stReach).addScaledVector(LAT,sideSign*latSep);
+      let W=S.clone().addScaledVector(F,horiz*1.02*stReach).addScaledVector(LAT,sideSign*latSep);
       W.y=groundY+.002;   // 掌面平铺在地面上
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
@@ -2185,8 +2233,11 @@ const D=.09*c + .032*s;
       const wf=rel.dot(F), wy=rel.dot(UP);
       const A=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d))));
       const phi=Math.atan2(wf,wy);
-      const t1=phi-A;
-      const E=S.clone().addScaledVector(F,L1*Math.sin(t1)).addScaledVector(UP,L1*Math.cos(t1));
+      // 两解：t1=phi±A，取"肘部更靠地面"的那个解 → 前臂贴着地面铺开
+      const mkE=(t)=>S.clone().addScaledVector(F,L1*Math.sin(t)).addScaledVector(UP,L1*Math.cos(t));
+      const Ea=mkE(phi-A), Eb=mkE(phi+A);
+      const t1=(Ea.y<=Eb.y)?(phi-A):(phi+A);
+      const E=(Ea.y<=Eb.y)?Ea:Eb;
       const t2=Math.atan2(W.clone().sub(E).dot(F),W.clone().sub(E).dot(UP));
       const alignBone=(bone,ang)=>{
         const pQ=bone.parent.getWorldQuaternion(new THREE.Quaternion());
@@ -2290,12 +2341,7 @@ function loop(){
     purrFade=THREE.MathUtils.clamp((STATE.moveZ-FAR_Z)/(JOIN_Z-FAR_Z),0,1);
   }
   CatAudio.update(Math.max(STATE.enjoy, stretchPurr), dt, purrFade);
-  // 苹果轻微摆动（绕挂点的钟摆，每个频率/相位/幅度不同）
-  if(appleSwingList) for(const ap of appleSwingList){
-    const u=ap.userData;
-    ap.rotation.z=Math.sin(t*u.w+u.p)*u.a;
-    ap.rotation.x=Math.cos(t*u.w*.78+u.p*1.3)*u.a*.65;
-  }
+
   // 洞内压暗：z 越靠里越暗（-0.03 起、-0.14 到底，最暗 20%），走出洞口逐渐恢复
   if(rig.catMats){
     const deep=THREE.MathUtils.clamp((-.03-STATE.moveZ)/.11,0,1);
@@ -2304,6 +2350,25 @@ function loop(){
   }
   calibTick(dt);
   updateWand();
+  // 苹果轻微摆动（绕挂点的钟摆，每个频率/相位/幅度不同）
+  if(appleSwingList){
+    for(const ap of appleSwingList.apples){
+      const u=ap.userData;
+      ap.rotation.z=Math.sin(t*u.w+u.p)*u.a;
+      ap.rotation.x=Math.cos(t*u.w*.78+u.p*1.3)*u.a*.65;
+    }
+    // 水面极缓慢起伏（呼吸感，不抢戏）
+    if(appleSwingList.water) for(const w of appleSwingList.water){
+      w.position.y=w.userData.baseY+Math.sin(t*1.1)*.0008;
+    }
+  }
+  // 伸懒腰时相机轻微后拉 + 略抬，避免前掌完全出画（结束后回原位）
+  if(rig.camBase){
+    const _st=Math.max(0,Math.min(1,STATE._stReach||0));
+    camera.position.z=rig.camBase.pz + .090*_st;
+    camera.position.y=rig.camBase.py + .016*_st;
+    camera.lookAt(rig.camBase.lx, rig.camBase.ly, rig.camBase.lz);
+  }
   renderer.render(scene, camera);
 }
 
