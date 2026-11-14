@@ -666,7 +666,7 @@ scene.add(ground);
     {
       // 实心黑色填充块：截面与洞口同形状，前端就在洞口平面上，向后延伸——
       // 实心不透光，从任何角度看都只会看到"黑"，不会透出天空/草地（空心感的根源）
-      const PW=CUT_W-.05, zF=frontZ-.02, PL=.55, Y0=-.10;    // 截面略小于唇边内径：黑面藏在唇边后面，不会探出树皮
+      const PW=CUT_W-.015, zF=frontZ-.02, PL=.55, Y0=-.10;   // 截面略小于唇边外缘：黑面藏在唇边后面，同时盖住洞口边角漏色
       const shp=new THREE.Shape();
       shp.moveTo(-PW,Y0); shp.lineTo(PW,Y0); shp.lineTo(PW,SPRING_Y);
       shp.absarc(0,SPRING_Y,PW,0,Math.PI,false); // 右 → 顶 → 左（顺序错了会导致封口三角化失败、正面没有面）
@@ -2153,7 +2153,7 @@ const CatAudio=(()=>{
     if(!built||!unlocked) return;
     const p=Math.max(0,Math.min(1,purrLevel));
     const fade=Math.max(0,Math.min(1,fadeIn));
-    const purrTarget=(.25+.75*p)*.72*fade;      // 呼噜再降 10%，随 walkIn 渐入
+    const purrTarget=(.25+.75*p)*.72*.95*fade;  // 呼噜在上一版基础上再降 5%，随 walkIn 渐入
     purrEl.volume+=(purrTarget-purrEl.volume)*Math.min(1,dt*6);
     if(purrEl.paused) tryPlay(purrEl);
     const mt=(musicEnabled?.26:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
@@ -2338,15 +2338,31 @@ async function startCamera(){
   }
   ui.camDot.className='dot wait'; ui.camState.textContent='启动中';
   video = document.getElementById('pipVideo');
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video:{facingMode:'user', width:{ideal:640}, height:{ideal:480}}, audio:false
-  });
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'user', width:{ideal:640}, height:{ideal:480}}, audio:false
+    });
+  }catch(e){ ui.camDot.className='dot'; ui.camState.textContent='未开启'; throw e; }
+  const vTracks = stream.getVideoTracks ? stream.getVideoTracks() : [];
+  if(!vTracks.length){ stream.getTracks().forEach(t=>t.stop()); throw new Error('NO_VIDEO_TRACK'); }
   video.srcObject = stream;
-  await new Promise(r=>video.onloadedmetadata=r);
-  await video.play();
-  document.getElementById('pip').style.display='block';
+  // 等元数据：先看 readyState 再挂监听，并加 6s 兜底。
+  // 旧写法 await new Promise(r=>video.onloadedmetadata=r) 有竞态：元数据早于赋值到达时会永远挂住（"允许了也打不开"）。
+  if(video.readyState < 1){
+    await new Promise(res=>{
+      let done=false;
+      const finish=()=>{ if(done) return; done=true; clearTimeout(timer);
+        video.removeEventListener('loadedmetadata',finish); video.removeEventListener('error',finish); res(); };
+      const timer=setTimeout(finish,6000);
+      video.addEventListener('loadedmetadata',finish);
+      video.addEventListener('error',finish);
+    });
+  }
   STATE.camOn = true;
+  document.getElementById('pip').style.display='block';
   setDot(ui.camDot,true); ui.camState.textContent='已开启';
+  try{ await video.play(); }catch(e){ console.warn('video.play() 被浏览器拦截，识别仍会继续', e); }
 }
 
 function stopCamera(){
@@ -2650,6 +2666,10 @@ function showCamError(err){
     msg='当前环境不支持摄像头（需在 https 或 localhost 下打开）。你仍可用鼠标移动与猫互动。';
   }else if(err && (err.name==='NotAllowedError' || err.name==='SecurityError')){
     msg='摄像头权限被拒绝。请在浏览器地址栏的权限设置里允许摄像头，再点一次。';
+  }else if(err && err.message==='NO_VIDEO_TRACK'){
+    msg='摄像头没有返回画面（可能被其它程序占用）。关掉占用的应用后再试，或直接刷新页面。';
+  }else if(err && err.message==='MODEL_TIMEOUT'){
+    msg='识别模型下载超时（约 15MB，网络较慢时常见）。请检查网络后重新点击「开启摄像头」，或刷新页面重试。';
   }else if(err && err.name==='NotFoundError'){
     msg='没有检测到摄像头设备。你仍可用鼠标移动与猫互动。';
   }else{
@@ -2671,18 +2691,22 @@ const startBtn = document.getElementById('startBtn');
 startBtn.addEventListener('click', async ()=>{
   camErrEl.classList.remove('show');
   CatAudio.unlock();                    // 手势内尽早解锁音频，避免 await 后手势过期
+  let loadTimer=null;
   try{
     startBtn.disabled = true;
     startBtn.textContent = '正在开启摄像头…';
     await startCamera();                 // 先开摄像头，权限弹窗立即出现
-    startBtn.textContent = '正在加载识别模型…';
-    await ensureDetection();             // 加载模型并启动识别（统一入口，避免重复 detectLoop）
+    const t0=performance.now();
+    const tick=()=>{ startBtn.textContent=`正在加载识别模型… ${Math.round((performance.now()-t0)/1000)}s`; };
+    tick(); loadTimer=setInterval(tick,1000);
+    await ensureDetectionWithin(45000);  // 45s 上限：网络太差时给出明确提示而不是一直转
     enterMain();
   }catch(err){
     console.warn('摄像头不可用', err);
     ui.camDot.className='dot'; ui.camState.textContent='不可用';
     showCamError(err);
   }finally{
+    if(loadTimer) clearInterval(loadTimer);
     startBtn.disabled = false;
     startBtn.textContent = '开启摄像头';
   }
@@ -2705,8 +2729,19 @@ function syncModeUI(){
 }
 let detectStarted=false;
 async function ensureDetection(){
-  if(!faceLandmarker || !handLandmarker) await initVision();
+  if(!faceLandmarker || !handLandmarker){
+    try{ await initVision(); }
+    catch(e){ faceLandmarker=null; handLandmarker=null; throw e; }   // 半成品清空，便于重试
+  }
   if(!detectStarted){ detectStarted=true; detectLoop(); }
+}
+// 带超时的模型加载：网络太慢时不要无限等待
+async function ensureDetectionWithin(ms){
+  if(faceLandmarker && handLandmarker){ await ensureDetection(); return; }
+  let timer=null;
+  const timeout=new Promise((_,rej)=>{ timer=setTimeout(()=>rej(new Error('MODEL_TIMEOUT')),ms); });
+  try{ await Promise.race([ensureDetection(), timeout]); }
+  finally{ if(timer) clearTimeout(timer); }
 }
 modeMouseBtn.addEventListener('click', ()=>{
   if(STATE.inputMode==='mouse') return;
