@@ -563,7 +563,8 @@ scene.add(ground);
   const mossGroundMat=mat({map:mossGroundTex,roughness:1});
   const mossMat=mat({map:mossStumpTex,roughness:.98});
   const barkMat=mat({map:barkTex,roughness:.92});
-  const holeWallMat=mat({color:0x1c130c,roughness:1,side:THREE.BackSide});
+
+  const holeVoidMat=new THREE.MeshBasicMaterial({color:0x000000,fog:false});   // 纯黑内腔：不吃光照、不受雾影响
   const rimWoodMat=mat({color:0x57412d,roughness:1});
   const cushionMat=mat({color:0x9c7c5e,roughness:1});
   const creamMat=mat({color:0xefe6d2,roughness:.85});
@@ -574,17 +575,6 @@ scene.add(ground);
   const leafDarkMat=mat({color:0x35552c,roughness:.9,side:THREE.DoubleSide});
   const flowerMats=[0x9b6bb0,0xb07fc4,0xd78fb8,0x8a5aa0].map(c=>mat({color:c,roughness:.8}));
   const glowMat=mat({color:0xffd9a0,emissive:0xffd9a0,emissiveIntensity:3});
-  const aoMat=new THREE.MeshBasicMaterial({map:tex((()=>{
-    const c=canvas(256,256),x=c.getContext('2d');
-    const g=x.createRadialGradient(128,128,58,128,128,128);
-    g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(.55,'rgba(0,0,0,.5)');g.addColorStop(1,'rgba(0,0,0,0)');
-    x.fillStyle=g;x.fillRect(0,0,256,256);return c;})()),transparent:true,depthWrite:false});
-  const cavMat=new THREE.MeshBasicMaterial({map:tex((()=>{
-    const c=canvas(256,256),x=c.getContext('2d');
-    x.fillStyle='#0c0805';x.fillRect(0,0,256,256);
-    const g=x.createRadialGradient(128,96,8,128,128,128);
-    g.addColorStop(0,'rgba(64,45,30,.55)');g.addColorStop(.7,'rgba(12,8,5,0)');g.addColorStop(1,'rgba(0,0,0,.6)');
-    x.fillStyle=g;x.fillRect(0,0,256,256);return c;})())});
 
   /* ---------- 场景组（整体微缩） ---------- */
   const FOREST_SCALE=.48;
@@ -594,6 +584,7 @@ scene.add(ground);
   ground.visible=false;
 
   const unitCircle=new THREE.CircleGeometry(1,32);
+  const leafGeo=new THREE.CircleGeometry(.028,8);leafGeo.scale(1,1.7,1);   // 藤叶/叶簇共用（树洞唇边与藤蔓都要用）
   // 苔藓地面（缩小半径）
   put(new THREE.CircleGeometry(1.7,56),mossGroundMat,[0,.0,0],[-Math.PI/2,0,0]);
 
@@ -621,8 +612,9 @@ scene.add(ground);
       theta=Math.atan2(Math.sin(theta),Math.cos(theta));
       const hx=baseR*theta, vy=v.y-(SPRING_Y-STUMP.h/2);   // 拱的起拱线为 v=0
       if(vy< -RECT_H-.02) return false;         // 矩形底以下不挖
-      if(vy>=0) return Math.hypot(hx,vy)<CUT_W; // 上半圆拱
-      return Math.abs(hx)<CUT_W;};
+      if(vy>=0){ const a=Math.atan2(vy,hx||1e-6);          // 拱顶：半径带轻微起伏，避免完美圆
+        return Math.hypot(hx,vy) < CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3)); }
+      return Math.abs(hx) < CUT_W*(1+.03*Math.sin(vy*9+2));};   // 竖边：略微鼓/收
     for(let i=0;i<idx.count;i+=3){
       a.fromBufferAttribute(sp,idx.getX(i));b.fromBufferAttribute(sp,idx.getX(i+1));c.fromBufferAttribute(sp,idx.getX(i+2));
       m.copy(a).add(b).add(c).multiplyScalar(1/3);
@@ -640,40 +632,55 @@ scene.add(ground);
   put(capGeo,mossMat,[0,STUMP.h+.02,STUMP.zs]);
 
   /* ---------- 树洞 ---------- */
-  function den(theta,y,rad,entrance){
+  // 树干曲面取点：hx=沿圆周的弧长、y=高度，off=沿法向的外扩量（负值向内）
+  const onTrunk=(hx,y,off=0)=>{
+    const r=rAt(y)+off, theta=hx/r;
+    return V(r*Math.sin(theta),y,STUMP.zs+r*Math.cos(theta));
+  };
+  // 装饰小洞：纯黑内腔 + 树皮唇边（平面 AO 圆片贴在曲面上会"浮"，已去掉）
+  function den(theta,y,rad){
     const r=rAt(y);
     const parent=new THREE.Matrix4().compose(
       V(r*Math.sin(theta),y,STUMP.zs+r*Math.cos(theta)),Q(0,theta,0),V(1,1,1));
-    putIn(parent,unitCircle,aoMat,[0,0,.002],null,[rad*1.7,rad*1.7,1]);
-    putIn(parent,unitCircle,cavMat,[0,0,.005],null,[rad,rad,1]);
-    putIn(parent,new THREE.CylinderGeometry(rad,rad*.9,.16,24,1),holeWallMat,[0,0,-.06],[Math.PI/2,0,0]);
-    putIn(parent,new THREE.TorusGeometry(rad,.01,10,32),rimWoodMat,[0,0,.008]);
-    putIn(parent,new THREE.TorusGeometry(rad+.012,.008,8,24,Math.PI),mossMat,[0,0,.01]);
-    if(!entrance)
-      putIn(parent,new THREE.SphereGeometry(rad*.46,14,10),cushionMat,[0,-rad*.5,-.02],null,[1,.36,.7]);
+    putIn(parent,new THREE.CylinderGeometry(rad,rad*.8,.20,24,1,true),holeVoidMat,[0,0,-.115],[Math.PI/2,0,0]);
+    putIn(parent,unitCircle,holeVoidMat,[0,0,-.205],null,[rad*.8,rad*.8,1]);
+    putIn(parent,new THREE.TorusGeometry(rad,.017,8,28),barkMat,[0,0,.003]);
+    putIn(parent,new THREE.TorusGeometry(rad+.015,.009,7,20,Math.PI),mossMat,[0,0,.012]);
   }
-  // 中央大入口：矩形+半圆拱，深色内隧道 + 木质拱缘/侧柱 + 上缘苔藓
+  // 中央大入口：纯黑内腔 + 沿树干曲面走的树皮唇边（去掉原来的平面环/方柱贴片）
   function bigEntrance(){
-    const TINNER=.31,TLEN=.56;
-    const frontZ=STUMP.zs+rAt(SPRING_Y);          // 起拱线表面 z
-    // 圆形截面隧道（轴沿 z）：中心对齐起拱线，上半圆填拱、下半覆盖矩形并入地
-    put(new THREE.CylinderGeometry(TINNER,TINNER,TLEN,32,1,true),holeWallMat,
-      [0,SPRING_Y,frontZ-TLEN/2],[Math.PI/2,0,0]);
-    put(unitCircle,cavMat,[0,SPRING_Y,frontZ-TLEN],null,[TINNER,TINNER,1]);
-    // 表面门颈（原点在起拱线）
-    const parent=new THREE.Matrix4().compose(V(0,SPRING_Y,frontZ),Q(0,0,0),V(1,1,1));
-    putIn(parent,unitCircle,aoMat,[0,0,.001],null,[CUT_W*1.5,CUT_W*1.5,1]);
-    // 上半圆门颈 + 半圆唇 + 苔藓
-    putIn(parent,new THREE.RingGeometry(ARCH_W-.02,CUT_W+.05,44,1,0,Math.PI),rimWoodMat,[0,0,.03]);
-    putIn(parent,new THREE.TorusGeometry(ARCH_W,.018,12,40,Math.PI),rimWoodMat,[0,0,.032]);
-    putIn(parent,new THREE.TorusGeometry(ARCH_W+.05,.012,8,32,Math.PI),mossMat,[0,0,.038]);
-    // 两侧竖直门柱（覆盖矩形段挖洞锯齿）
-    const bandW=(CUT_W+.05)-(ARCH_W-.02), sideX=((CUT_W+.05)+(ARCH_W-.02))/2;
-    for(const sx of [-sideX,sideX])
-      putIn(parent,new THREE.BoxGeometry(bandW,RECT_H+.02,.03),rimWoodMat,[sx,-RECT_H/2,.03]);
+    const TINNER=.315, TLEN=.66;
+    const frontZ=STUMP.zs+rAt(SPRING_Y);          // 起拱线处的树干表面 z
+    // 内腔整体后移，保证圆柱前缘始终藏进树皮里（原先前缘在拱顶处探出树干，猫走过就有穿模感）
+    put(new THREE.CylinderGeometry(TINNER,TINNER,TLEN,36,1,true),holeVoidMat,
+      [0,SPRING_Y,frontZ-.06-TLEN/2],[Math.PI/2,0,0]);
+    put(unitCircle,holeVoidMat,[0,SPRING_Y,frontZ-.06-TLEN],null,[TINNER,TINNER,1]);
+    // 洞口唇边：树皮沿洞口卷起一圈，压住挖洞锯齿；两端埋进地面，避免出现"门框立柱"
+    // 唇边轮廓与挖洞完全同源：竖边按同一 wobble、拱顶按同一不规则半径，保证严丝合缝
+    const sideW=(y)=>{ const vy=y-(SPRING_Y-STUMP.h/2); return CUT_W*(1+.03*Math.sin(vy*9+2)); };
+    const archR=(a)=>CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3));
+    const baseY=-.05, archPts=[], leftPts=[], rightPts=[];
+    for(let i=0;i<=26;i++){ const a=Math.PI*i/26, rr=archR(a)+.004;
+      archPts.push(onTrunk(rr*Math.cos(a),SPRING_Y+rr*Math.sin(a),.006)); }
+    for(let y=SPRING_Y;y>=baseY;y-=.045){ rightPts.push(onTrunk(sideW(y)+.004,y,.002)); leftPts.push(onTrunk(-(sideW(y)+.004),y,.002)); }
+    // 上拱：树皮卷边更厚更外凸（视线主要落在这里）
+    put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPts,false,'catmullrom',.12),90,.046,10,false),barkMat);
+    // 两侧竖边：细一点、贴得紧一点，避免在树干轮廓处读成独立木柱
+    for(const sp of [leftPts,rightPts])
+      put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp,false,'catmullrom',.12),40,.026,8,false),barkMat);
+    // 口沿上缘：扁平苔团贴着外缘，把洞口的轮廓继续打散
+    for(let i=0;i<=5;i++){
+      const a=Math.PI*(.18+.64*i/5), rr=archR(a)+.026, hx=rr*Math.cos(a), y=SPRING_Y+rr*Math.sin(a);
+      const pz=onTrunk(hx,y,.006);
+      put(new THREE.SphereGeometry(.045+Math.random()*.018,12,8),mossMat,
+        [pz.x,pz.y,pz.z],null,[1.35,.34,1]);
+    }
+    // 洞口的土坡门槛：把黑洞与草地之间那道人造硬边化开
+    const thr=onTrunk(0,.02,.012);
+    put(new THREE.SphereGeometry(.12,18,12),mossMat,[thr.x,.005,thr.z],null,[1.5,.22,.8]);
   }
   bigEntrance();
-  den(-.16,.7,.075);den(.34,.82,.06); // 上部两个装饰小洞（上移避开加高的拱顶）
+  den(.34,.82,.06);   // 只保留右侧装饰小洞；左侧与拱顶相接的那个已按需求删除
 
   /* ---------- 树桩表面苔藓斑块 ---------- */
   [[-.78,.42,.07,.05],[.78,.48,.06,.06],[-.62,.72,.08,.05],[.64,.8,.07,.06],
@@ -705,6 +712,7 @@ scene.add(ground);
   }
   placeMush(1.3,-1.04,.0,.018);placeMush(.75,-.575,.0,.473);placeMush(1.1,.773,.0,.338);
   placeMush(1.15,-.45,.96,-.35,true);placeMush(.9,.42,.98,-.25,true);placeMush(.7,.05,1.0,-.5,true);
+  placeMush(.62,-.78,.94,-.52,true);placeMush(.5,.72,.92,-.58,true);
 
   /* ---------- 苔藓天花 ---------- */
   const ceilGeo=new THREE.PlaneGeometry(2.8,2.2,18,14);
@@ -716,7 +724,6 @@ scene.add(ground);
   put(ceilGeo,mossMat,[0,1.08,-.25],[Math.PI/2,0,0]);
 
   /* ---------- 藤蔓 ---------- */
-  const leafGeo=new THREE.CircleGeometry(.028,8);leafGeo.scale(1,1.7,1);
   function vine(x,z,len){
     const top=1.05,pts=[];
     for(let i=0;i<=5;i++){const t=i/5;
@@ -738,6 +745,7 @@ scene.add(ground);
         [x+rnd(-.03,.03),top-drop*t,z+rnd(-.03,.03)],null,[1,1.4,1]);}
   }
   wisteria(-.25,-.7,.4);wisteria(.28,-.7,.42);wisteria(.75,-.5,.38);wisteria(-.78,-.45,.36);
+  wisteria(.5,-.62,.44);wisteria(-.55,-.58,.4);
 
   /* ---------- 针织蒲团 ---------- */
   function pouf(x,z,s,col){
@@ -757,10 +765,10 @@ scene.add(ground);
   fern(0,-1.55,1.4);fern(-.95,-1.25,1.3);fern(.95,-1.25,1.3);fern(-1.4,-.35,1.1);fern(1.4,-.35,1.1);
 
   /* ---------- 暖灯（仅发光球，不再用点光） ---------- */
-  [[-.35,.5,-.35],[.4,.62,-.4],[0,.85,-.55]].forEach(p=>put(new THREE.SphereGeometry(.016,8,6),glowMat,p));
+  [[-.35,.5,-.35],[.4,.62,-.4],[0,.85,-.55],[.24,.8,-.3],[-.3,.8,-.28]].forEach(p=>put(new THREE.SphereGeometry(.014,8,6),glowMat,p));
 
   /* ---------- 合并并加入组 ---------- */
-  const shadowMats=new Set([barkMat,mossMat,creamMat,redCapMat,holeWallMat,rimWoodMat,cushionMat]);
+  const shadowMats=new Set([barkMat,mossMat,creamMat,redCapMat,rimWoodMat,cushionMat]);
   for(const [material,geos] of buckets){
     const mergedGeo=mergeGeometries(geos,false);
     const mesh=new THREE.Mesh(mergedGeo,material);
@@ -788,7 +796,7 @@ scene.add(ground);
       vertexShader:'attribute float aPhase;uniform float uTime,uSize;varying float vA;'+
         'void main(){vA=.4+.6*sin(uTime*1.7+aPhase*6.2831);'+
         'vec4 mv=modelViewMatrix*vec4(position,1.0);'+
-        'gl_PointSize=uSize*(240.0/max(.001,-mv.z));gl_Position=projectionMatrix*mv;}',
+        'gl_PointSize=min(uSize*(240.0/max(.001,-mv.z)),22.0);gl_Position=projectionMatrix*mv;}',
       fragmentShader:'uniform vec3 uColor;varying float vA;'+
         'void main(){float r=length(gl_PointCoord-0.5);'+
         'gl_FragColor=vec4(uColor,smoothstep(.5,0.0,r)*vA);}',
@@ -936,6 +944,8 @@ function loadCat(b64){
         '}\n');
       irisMat.userData.shader=sh;
     };
+    irisMat.userData._baseColor=irisMat.color.clone();
+    if(rig.catMats && !rig.catMats.includes(irisMat)) rig.catMats.push(irisMat);
     model.updateMatrixWorld(true);
     const headBone = rig.bones['Bone004'];   // 眼球挂到上脊柱，跟随头部运动
     rig.eyePivots = [];
@@ -950,6 +960,16 @@ function loadCat(b64){
       group.add(new THREE.Mesh(irisGeo,irisMat));
       pivot.add(group);
       rig.eyePivots.push({pivot,group});
+    });
+
+    // 猫的材质登记：供"从树洞里走出来"时按洞内深度整体压暗（洞内纯黑，猫不能亮着像贴上去）
+    rig.catMats = [];
+    model.traverse(o=>{
+      if(o.isMesh && o.material && o.material.isMeshStandardMaterial){
+        const m=o.material;
+        if(!m.userData._baseColor) m.userData._baseColor=m.color.clone();
+        if(!rig.catMats.includes(m)) rig.catMats.push(m);
+      }
     });
 
     // 白胡子已按用户要求移除（不再构建任何胡须几何体）
@@ -2117,6 +2137,12 @@ function loop(){
     purrFade=THREE.MathUtils.clamp((STATE.moveZ-FAR_Z)/(JOIN_Z-FAR_Z),0,1);
   }
   CatAudio.update(Math.max(STATE.enjoy, stretchPurr), dt, purrFade);
+  // 洞内压暗：z 越靠里越暗（-0.03 起、-0.14 到底，最暗 20%），走出洞口逐渐恢复
+  if(rig.catMats){
+    const deep=THREE.MathUtils.clamp((-.03-STATE.moveZ)/.11,0,1);
+    const k=1-.80*deep;
+    for(const m of rig.catMats) m.color.copy(m.userData._baseColor).multiplyScalar(k);
+  }
   calibTick(dt);
   updateWand();
   renderer.render(scene, camera);
