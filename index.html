@@ -252,7 +252,7 @@
   </svg>
   <span id="soundLabel">音乐开</span>
 </button>
-  <button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与左下角状态栏（H 键）">收起面板</button>
+  <button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与左下角状态栏（H 键）">一键收起</button>
 </div>
 
 <svg id="wand" aria-hidden="true">
@@ -627,7 +627,6 @@ const appleSwingList=(()=>{
   const dotMat=mat({color:0xf6f1e6,roughness:.7});
   const leafMat=mat({color:0x4f7a3c,roughness:.85,side:THREE.DoubleSide});
   const leafDarkMat=mat({color:0x35552c,roughness:.9,side:THREE.DoubleSide});
-  const flowerMats=[0xc9a8e6,0xd5b8ee,0xbf98dd,0xe0c9f2].map(c=>mat({color:c,roughness:.8}));   // 统一淡紫色
   const glowMat=mat({color:0xffe6b8,emissive:0xffe6b8,emissiveIntensity:5.2});
 
   /* ---------- 场景组（整体微缩） ---------- */
@@ -859,23 +858,23 @@ const appleSwingList=(()=>{
   }
   vine(-.45,-.6,.35);vine(.45,-.6,.38);vine(-1.1,-.2,.4);vine(1.1,-.2,.42);vine(0,-.7,.3);
 
-  /* ---------- 紫藤 ---------- */
-  function wisteria(x,z,drop){
+  /* ---------- 垂叶串（原紫藤花串，现在全部是绿叶） ---------- */
+  function leafStrand(x,z,drop){
     if(inTrunkBody(x,z,.12)){
       const R=rAt(.85)+.14, dz=z-STUMP.zs, half=Math.sqrt(Math.max(0,R*R-dz*dz));
       x=(x<0?-1:1)*Math.max(Math.abs(x),half);
     }
     const top=1.05;
     put(new THREE.CylinderGeometry(.004,.004,drop,5),leafDarkMat,[x,top-drop/2,z]);
-    // 花串：等距垂挂、自上而下略收，颜色按固定序列交替（规整）
+    // 绿叶串：等距垂挂、自上而下略收，左右交替朝向（原花串全部换成叶子）
     for(let i=0;i<7;i++){
-      const t=i/6, taper=1-.28*t;
-      if(inTrunkBody(x,z,.04)) continue;                        // 花串不要垂进树干
-      put(new THREE.SphereGeometry(.018,10,8),flowerMats[i%flowerMats.length],
-        [x,top-drop*t,z],null,[taper,1.4*taper,taper]); }
+      const t=i/6, s2=1-.26*t, side3=(i%2)?1:-1;
+      if(inTrunkBody(x,z,.04)) continue;                        // 叶串不要垂进树干
+      put(leafGeo,(i%2)?leafMat:leafDarkMat,
+        [x+side3*.010,top-drop*t,z], [0,side3*.85,.62], [1.15*s2,1.35*s2,1.15*s2]); }
   }
-  wisteria(-.25,-.7,.4);wisteria(.28,-.7,.42);wisteria(.75,-.5,.38);wisteria(-.78,-.45,.36);
-  wisteria(.5,-.62,.44);wisteria(-.55,-.58,.4);
+  leafStrand(-.25,-.7,.4);leafStrand(.28,-.7,.42);leafStrand(.75,-.5,.38);leafStrand(-.78,-.45,.36);
+  leafStrand(.5,-.62,.44);leafStrand(-.55,-.58,.4);
 
   /* ---------- 针织蒲团 ---------- */
   const kibbleMat=mat({color:0x6a4a2e,roughness:.85});
@@ -1423,7 +1422,7 @@ function updateMoodLabel(c){
   const sync=()=>{
     const hidden=body.classList.contains('chromeHidden');
     btn.classList.toggle('on',hidden);
-    btn.textContent=hidden?'显示面板':'收起面板';
+    btn.textContent=hidden?'一键显示':'一键收起';
     btn.setAttribute('aria-pressed',hidden?'true':'false');
   };
   if(btn){
@@ -1826,13 +1825,13 @@ function updateActions(t, dt){
       if(STATE.actionCool<=0 && !busy){
         // 自由状态概率：坐着 > 站着 > 踩奶 > 抖毛 > 伸懒腰 = 扑玩
         const r=Math.random();
-        if(r<.34){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}          // 坐着 34%
-        else if(r<.58){STATE.actionCool=1.6+Math.random()*1.8;}                                       // 站着 24%（维持待机）
-        else if(r<.685){STATE.action='knead';STATE.actionT=0;}                                        // 踩奶 10.5%
-        else if(r<.79){STATE.action='shake';STATE.actionT=0;                                          // 抖毛 10.5%
+        if(r<.28){STATE.actionCool=1.6+Math.random()*1.8;}                                             // 站着 28%
+        else if(r<.52){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}      // 坐着 24%
+        else if(r<.64){STATE.action='knead';STATE.actionT=0;}                                          // 踩奶 12%
+        else if(r<.76){STATE.action='shake';STATE.actionT=0;                                           // 抖毛 12%
           STATE.shakeAmp=.85+Math.random()*.15;STATE.shakeDur=.95+Math.random()*.3;}
-        else if(r<.895){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 10.5%
-        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                      // 扑玩 10.5%
+        else if(r<.88){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 12%
+        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                       // 扑玩 12%
               STATE.action='pounce';STATE.actionT=0;}
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
