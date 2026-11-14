@@ -290,7 +290,7 @@
       <li><b>正对镜头停留</b>：猫咪回看，并慢慢眨眼（猫咪之吻）</li>
       <li><b>眨眼</b>：猫咪回你一次慢眨眼</li>
       <li><b>点头</b>：猫咪跟着你一起点头</li>
-      <li><b>连续点头三次</b>：猫咪开心地手舞足蹈</li>
+      <li><b>连续点头两次</b>：猫咪开心地手舞足蹈</li>
       <li><b>摇头</b>：猫咪抖抖耳朵，往一侧轻瞟</li>
       <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
     </ul>
@@ -423,6 +423,7 @@ const STATE = {
   walkPhase:0,            // 四腿步态相位
   moveX:0, moveZ:-.4,     // 开场在树洞内远处位（随后由 FAR_Z 覆盖）；walkIn 走到 JOIN_Z 定点；pounce 只沿 z 朝屏幕
   sniffCool:0, _smileT:0, // 微笑嗅闻互动：冷却 / 微笑持续时间
+  danceCool:0,             // 手舞足蹈冷却（避免连续刷屏）
   lastAct:'', lastActT:-99, // 最近一次互动（状态栏显示 3 秒）
   happy:0,                // 开心反应量（剪刀手/微笑）
   startle:0,              // 惊讶量（张嘴）
@@ -1450,6 +1451,8 @@ function updateMoodLabel(c){
 function noteAct(name){
   STATE.lastAct=name;
   STATE.lastActT=(typeof clock!=='undefined'&&clock)?clock.elapsedTime:performance.now()/1000;
+  // 互动后给一段"专注期"：不马上开始自主动作，让用户看到猫在回应自己
+  if(typeof STATE.actionCool==='number') STATE.actionCool=Math.max(STATE.actionCool,2.2);
 }
 
 /* ---- 左侧状态栏：可收起/展开（按钮或 Tab） ---- */
@@ -1694,12 +1697,14 @@ function updateActions(t, dt){
   if(STATE.action!=='stretch' && fgEv.nod!==rp._last.nod){
     rp._last.nod=fgEv.nod;
     if(claim(0.62)){ rp.nod=1; rp.nodT=0; noteAct('跟着点头'); }   // 跟着点一下（点头可连续：冷却 .55s < 动画 .62s 时自动排队）
-    // 连续三次点头（3.5s 内）→ 手舞足蹈
+    // 连续两次点头（3.2s 内）→ 手舞足蹈（门槛降低，小互动也有大反馈）
     const now2=clock.elapsedTime;
-    STATE._nodT=(STATE._nodT||[]).filter(v=>now2-v<3.5);
+    STATE._nodT=(STATE._nodT||[]).filter(v=>now2-v<3.2);
     STATE._nodT.push(now2);
-    if(STATE._nodT.length>=3 && (STATE.action==='idle'||STATE.action==='sit') && STATE.top==='engaged'){
-      STATE._nodT=[]; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2; noteAct('手舞足蹈');
+    if(STATE._nodT.length>=2 && (STATE.action==='idle'||STATE.action==='sit')
+       && STATE.top==='engaged' && (STATE.danceCool||0)<=0){
+      STATE._nodT=[]; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
+      STATE.danceCool=4.5; noteAct('手舞足蹈');
     }
   }
   if(STATE.action!=='stretch' && fgEv.shake!==rp._last.shake){
@@ -1708,12 +1713,13 @@ function updateActions(t, dt){
   }
   // 微笑互动：连续微笑 0.5s → 猫走近镜头闻一闻（冷却 9s，结束自动退回定点）
   if(STATE.sniffCool>0) STATE.sniffCool-=dt;
+  if(STATE.danceCool>0) STATE.danceCool-=dt;
   const _f=STATE.face;
   if(_f && _f.active && (_f.smile||0)>SMILE_THRESH) STATE._smileT=(STATE._smileT||0)+dt;
   else STATE._smileT=0;
   if(STATE._smileT>.35 && STATE.sniffCool<=0 && STATE.top==='engaged'
      && STATE.action==='idle' && STATE.hasJoined){
-    STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=9; STATE._smileT=0; noteAct('走近闻一闻');
+    STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=6; STATE._smileT=0; noteAct('走近闻一闻');
   }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
@@ -1852,13 +1858,13 @@ function updateActions(t, dt){
       if(STATE.actionCool<=0 && !busy){
         // 自由状态概率：坐着 > 站着 > 踩奶 > 抖毛 > 伸懒腰 = 扑玩
         const r=Math.random();
-        if(r<.28){STATE.actionCool=1.6+Math.random()*1.8;}                                             // 站着 28%
-        else if(r<.52){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}      // 坐着 24%
-        else if(r<.64){STATE.action='knead';STATE.actionT=0;}                                          // 踩奶 12%
-        else if(r<.76){STATE.action='shake';STATE.actionT=0;                                           // 抖毛 12%
+        if(r<.34){STATE.actionCool=1.6+Math.random()*1.8;}                                             // 站着 34%
+        else if(r<.62){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}      // 坐着 28%
+        else if(r<.74){STATE.action='knead';STATE.actionT=0;}                                          // 踩奶 12%
+        else if(r<.84){STATE.action='shake';STATE.actionT=0;                                           // 抖毛 10%
           STATE.shakeAmp=.85+Math.random()*.15;STATE.shakeDur=.95+Math.random()*.3;}
-        else if(r<.88){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 12%
-        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                       // 扑玩 12%
+        else if(r<.92){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 8%
+        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                       // 扑玩 8%
               STATE.action='pounce';STATE.actionT=0;}
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
@@ -1997,7 +2003,7 @@ function updateActions(t, dt){
     if(at<T1){ STATE.moveZ=JOIN_Z+(SNIFF_Z-JOIN_Z)*eIO(at/T1); moving=1; }
     else if(at<T2){ STATE.moveZ=SNIFF_Z; }
     else if(at<T3){ STATE.moveZ=SNIFF_Z-(SNIFF_Z-JOIN_Z)*eIO((at-T2)/SNIFF_BACK); moving=1; }
-    else { STATE.moveZ=JOIN_Z; toIdle(); STATE.sniffCool=9; }
+    else { STATE.moveZ=JOIN_Z; toIdle(); STATE.sniffCool=6; }
   }
   if(act==='pounce'){
     // 分阶段：蹲伏蓄力 → 弹道前扑（减速 ease-out）→ 落地短暂停顿 → 平滑退步回位
@@ -2945,7 +2951,7 @@ function detectFaceGestures(fl, nowSec){
   faceGestDet.coolShake=Math.max(0,faceGestDet.coolShake-ddt);
   // 点头：一次向下往返即算（need=1），门槛 .12 更灵敏；摇头：左右各一次完整往返（need=2）
   // 点头：门槛 .07（更灵敏）、窗口 1.2s、冷却 .55s（可以连续跟点）
-  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.07,1.2,1)){ out.nod=true; faceGestDet.coolNod=0.55; }
+  if(faceGestDet.coolNod<=0 && excFeed(hy,faceGestDet.excY,nowSec,.055,1.5,1)){ out.nod=true; faceGestDet.coolNod=0.42; }   // 门槛 .055、窗口 1.5s、冷却 .42s：轻点两下也能中
   if(faceGestDet.coolShake<=0 && excFeed(hx,faceGestDet.excX,nowSec,.18,1.4,2)){ out.shake=true; faceGestDet.coolShake=1.4; }
   return out;
 }
