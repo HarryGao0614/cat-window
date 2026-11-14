@@ -1618,12 +1618,20 @@ function updateActions(t, dt){
     STATE.action='pounce';STATE.actionT=0;
   }
   STATE._pinchHeld=pinchNow;
-  // 夸张互动：手在画面里快速晃动时，猫开心地左右蹦两下再回原位（仅互动态）
+  // 夸张互动：逗猫棒（就猫棒模式）快速来回挥动 → 猫开心地蹦 6 下再回原位
   if(STATE.hopCool>0) STATE.hopCool-=dt;
+  let wandSpd=0;
+  if(STATE.inputMode==='mouse' && STATE.pointer.active){
+    if(STATE._prevPtr && dt>1e-4){
+      wandSpd=Math.hypot(STATE.pointer.x-STATE._prevPtr.x, STATE.pointer.y-STATE._prevPtr.y)/dt;
+    }
+    STATE._prevPtr={x:STATE.pointer.x,y:STATE.pointer.y};
+  } else STATE._prevPtr=null;
+  if(STATE.pointer.active) STATE._wandSpd=damp(STATE._wandSpd||0, wandSpd, 12, dt);
   if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='hop'
-     && STATE.hopCool<=0 && hSpd>1.0 && STATE.pawLift.L<.1 && STATE.pawLift.R<.1){
+     && STATE.hopCool<=0 && STATE._wandSpd>1.6 && STATE.pawLift.L<.1 && STATE.pawLift.R<.1){
     STATE.action='hop'; STATE.actionT=0;
-    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=5.4;
+    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=7.2; STATE._wandSpd=0;
   }
   if(STATE.clickPounce){
     STATE.clickPounce=false;
@@ -1728,16 +1736,18 @@ function updateActions(t, dt){
   const act=STATE.action;
   if(act==='pounce') STATE.actionT+=dt;  // pounce 在状态机外计时
   if(act==='hop'){
-    // 5s：先原地上下蹦两下 → 向左蹦 → 向右蹦 → 回中落定；每段都是一次抛物线起跳
+    // 6.5s / 共 6 次起跳：原地两下 → 向左 → 回中 → 向右 → 回中
     STATE.actionT+=dt;
-    const HOP_D=5.0, tt=STATE.actionT;
+    const HOP_D=6.5, tt=STATE.actionT;
     const easeIO=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
-    const arc=k=>Math.sin(Math.PI*Math.min(1,Math.max(0,k)))*.055;   // 单次起跳高度
-    let x=0, y=0;
-    if(tt<1.2){ x=0; y=arc((tt%0.6)/0.6); }                            // 原地蹦两下
-    else if(tt<2.6){ const k=(tt-1.2)/1.4; x=-0.11*easeIO(k); y=arc(k); }   // 向左蹦
-    else if(tt<4.0){ const k=(tt-2.6)/1.4; x=-0.11+0.22*easeIO(k); y=arc(k);} // 向右蹦
-    else if(tt<4.6){ const k=(tt-4.0)/0.6; x=0.11*(1-easeIO(k)); y=arc(k); }  // 回中
+    const arc=k=>Math.sin(Math.PI*Math.min(1,Math.max(0,k)))*.055;
+    // [开始, 结束, 起点x, 终点x] —— 每段一次独立抛物线起跳
+    const SEG=[[0,1.0,0,0],[1.0,2.0,0,0],[2.0,3.2,0,-.11],
+               [3.2,4.4,-.11,0],[4.4,5.6,0,.11],[5.6,6.5,.11,0]];
+    let x=0,y=0;
+    for(const [a,b,x0,x1] of SEG){
+      if(tt>=a && tt<b){ const k=(tt-a)/(b-a); x=x0+(x1-x0)*easeIO(k); y=arc(k); break; }
+    }
     STATE.moveX=x; STATE._hopY=y;
     if(tt>=HOP_D){ STATE.moveX=0; STATE._hopY=0; toIdle(); }
   }
@@ -1809,7 +1819,7 @@ const D=.09*c + .032*s;
   const swayLat=.002*Math.sin(GAIT.phi*Math.PI*2)*gw;
   let stDip=0, stYaw=0, stPitch=0;
   if(act==='stretch'){
-    stDip=.006*stArch;
+    stDip=.016*stArch;
     // 随机向左/右小幅转约10°再伸懒腰；快速转到位，结束前慢慢转回（回正更缓）
     const sIn=clamp01(at/.7), sOut=1-clamp01((at-1.7)/.9);
     stYaw=(STATE.stretchSide||1)*(Math.PI/18)*Math.min(sIn,sOut);
@@ -2038,10 +2048,10 @@ const D=.09*c + .032*s;
   if(act==='shake'){
     const dur=STATE.shakeDur||.8,amp=STATE.shakeAmp||1,env=Math.sin(Math.PI*Math.min(STATE.actionT/dur,1));
     const w=Math.sin(STATE.actionT*Math.PI*2*9.5);
-    shYaw=w*.05*amp*env;
-    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.075*amp*env;
-    shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.015*amp*env;
-    shRoot=w*.03*amp*env;
+    shYaw=w*.09*amp*env;
+    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.11*amp*env;
+    shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.02*amp*env;
+    shRoot=w*.055*amp*env;
     rig.root.rotation.z+=shRoot;
     rig.root.rotation.x+=shPitch*.5;
   }
@@ -2058,9 +2068,12 @@ const D=.09*c + .032*s;
       _SW_L.copy(qb).invert().multiply(_SW_W).multiply(qb);   // 世界摆动 → 该骨 rest 本地系
       bone.quaternion.multiply(_SW_L);
     };
-    applySway('Bone001',.55);   // 下脊柱明显抖动（抖身上的毛）
-    applySway('Bone002',.85);   // 上半身（胸段）主抖
-    applySway('Bone004',-.95);  // 头部与身体反向抖（真猫抖毛是"头往左、身子往右"）
+    applySway('Bone001',.85);   // 下脊柱（腰胯）一起抖
+    applySway('Bone002',1.05);  // 胸段主抖
+    applySway('Bone004',-.8);   // 头部反向、略滞后："头往左、身子往右"
+    // 尾巴也被甩起来
+    if(rig.bones.tail1) rig.bones.tail1.quaternion.multiply(
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0,shYaw*1.6,shRoll*1.2)));
   }
   // 头部稳定：root 步态起伏多少，头部控制骨反向平移抵消，保持水平（参考视频头部异常稳定）
   const headB=rig.bones['Bone004'];
@@ -2084,8 +2097,9 @@ const D=.09*c + .032*s;
       const LAT=new THREE.Vector3(Math.cos(stYaw),0,-Math.sin(stYaw));
       const sideSign=Math.sign(S.dot(LAT))||1;
       const latSep=stReach*.0124;   // 每掌额外外分约为前送量的 8%，两掌分开、减少与宽胸穿插
-      // 目标：从肩沿身体前向送出并向外分，掌落在地面（y=groundY），前向距离随 stReach 增大
-      let W=S.clone().addScaledVector(F,stReach*.158).addScaledVector(LAT,sideSign*latSep); W.y=groundY;
+      // 目标：从肩沿身体前向送出并向外分，掌落在地面并略微压下去（stReach 越大压得越低）
+      let W=S.clone().addScaledVector(F,stReach*.158).addScaledVector(LAT,sideSign*latSep);
+      W.y=groundY-.008*stReach;
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
       rel=rel.sub(lat);
