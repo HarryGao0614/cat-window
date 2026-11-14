@@ -571,7 +571,6 @@ scene.add(ground);
   const barkMat=mat({map:barkTex,roughness:.92});
 
   const holeVoidMat=new THREE.MeshBasicMaterial({color:0x0a0c10,fog:false,side:THREE.BackSide});   // 洞内暗面（略微提亮，仍读作暗）
-  const holeBackMat=new THREE.MeshBasicMaterial({color:0x0a0c10,fog:false,side:THREE.DoubleSide}); // 实心暗块（正反面都算不透明）
   const rimWoodMat=mat({color:0x57412d,roughness:1});
   const cushionMat=mat({color:0x9c7c5e,roughness:1});
   const creamMat=mat({color:0xefe6d2,roughness:.85});
@@ -595,42 +594,104 @@ scene.add(ground);
   // 苔藓地面（缩小半径）
   put(new THREE.CircleGeometry(1.7,56),mossGroundMat,[0,.0,0],[-Math.PI/2,0,0]);
 
-  /* ---------- 主树桩（噪声位移） ---------- */
-  const STUMP={rTop:.42,rBot:.58,h:1.02,seg:48,zs:-.58};
-  // 中央大入口：矩形+半圆拱（竖直段 RECT_H + 上半圆 ARCH_W），增高防穿模；挖洞 CUT_W 略大
-  const SPRING_Y=.34, ARCH_W=.28, RECT_H=.30, CUT_W=.33;
-  const stumpGeo=new THREE.CylinderGeometry(STUMP.rTop,STUMP.rBot,STUMP.h,96,44);   // 加密：挖洞边缘的台阶减半，看着更顺
-  const sp=stumpGeo.attributes.position,sv=new THREE.Vector3();
-  for(let i=0;i<sp.count;i++){
-    sv.fromBufferAttribute(sp,i);
-    const ang=Math.atan2(sv.z,sv.x);
-    const n=Math.sin(ang*3+1.7)*.05+Math.sin(ang*6)*.028+Math.sin(sv.y*9+ang*2)*.018;
-    const rr=Math.hypot(sv.x,sv.z)+n;
-    sp.setXYZ(i,Math.cos(ang)*rr,sv.y,Math.sin(ang)*rr);
-  }
-  stumpGeo.computeVertexNormals();
-  // 挖掉大入口区域的三角形（质心落在洞口内则剔除）
-  {
-    const idx=stumpGeo.index,keep=[];
-    const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),m=new THREE.Vector3();
-    const inHole=(v)=>{
-      const ang=Math.atan2(v.z,v.x),baseR=Math.hypot(v.x,v.z);
-      let theta=Math.PI/2-ang;                 // 几何 ang 转 den 的 theta（前=0）
-      theta=Math.atan2(Math.sin(theta),Math.cos(theta));
-      const hx=baseR*theta, vy=v.y-(SPRING_Y-STUMP.h/2);   // 拱的起拱线为 v=0
-      if(vy< -RECT_H-.08) return false;         // 一直挖到地面以下，避免底部留锯齿獠牙
-      if(vy>=0){ const a=Math.atan2(vy,hx||1e-6);          // 拱顶：半径带轻微起伏，避免完美圆
-        return Math.hypot(hx,vy) < CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3)); }
-      return Math.abs(hx) < CUT_W*(1+.03*Math.sin(vy*9+2));};   // 竖边：略微鼓/收
-    for(let i=0;i<idx.count;i+=3){
-      a.fromBufferAttribute(sp,idx.getX(i));b.fromBufferAttribute(sp,idx.getX(i+1));c.fromBufferAttribute(sp,idx.getX(i+2));
-      m.copy(a).add(b).add(c).multiplyScalar(1/3);
-      if(!inHole(m))keep.push(idx.getX(i),idx.getX(i+1),idx.getX(i+2));
-    }
-    stumpGeo.setIndex(keep);
-  }
-  put(stumpGeo,barkMat,[0,STUMP.h/2,STUMP.zs]);
+  /* ---------- 主树桩：参数化带洞曲面（洞口边缘是解析曲线，天生无锯齿） ---------- */
+  const STUMP={rTop:.42,rBot:.58,h:1.02,seg:96,zs:-.58};
+  const SPRING_Y=.34, ARCH_W=.28, CUT_W=.33;   // 洞口直通地面，RECT_H 不再需要
   const rAt=(y)=>{const t=Math.max(0,Math.min(1,y/STUMP.h));return STUMP.rBot+(STUMP.rTop-STUMP.rBot)*t;};
+  // 与旧版完全相同的树皮噪声，保证外观一致
+  const noiseAt=(theta,y)=>{ const a=Math.PI/2-theta, yl=y-STUMP.h/2;
+    return Math.sin(a*3+1.7)*.05+Math.sin(a*6)*.028+Math.sin(yl*9+a*2)*.018; };
+
+  // —— 洞口轮廓（沿用旧版那条"轻微不规则"的拱线，尺寸形状不变）——
+  const archR=(a)=>CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3));
+  const ARCH_PTS=[];
+  for(let i=0;i<=64;i++){ const a=Math.PI*i/64, R=archR(a);
+    ARCH_PTS.push([R*Math.cos(a), SPRING_Y+R*Math.sin(a)]); }        // [hx, y]，a 从 0→π
+  const sideHalfW=(y)=>CUT_W*(1+.03*Math.sin((y-SPRING_Y)*9+2));      // 矩形段半宽
+  // 给定高度，洞口沿圆周的半宽（弧长）；洞顶以上返回 0
+  const holeHalfW=(y)=>{
+    if(y>=SPRING_Y+ARCH_W) return 0;
+    if(y<=SPRING_Y) return sideHalfW(y);
+    // 拱段：在预采样轮廓上二分插值 hx(y)
+    for(let i=0;i<ARCH_PTS.length-1;i++){
+      const y0=ARCH_PTS[i][1], y1=ARCH_PTS[i+1][1];
+      if((y<=y0&&y>=y1)||(y<=y1&&y>=y0)){
+        const t=(y1===y0)?0:(y-y0)/(y1-y0);
+        return Math.abs(ARCH_PTS[i][0]*(1-t)+ARCH_PTS[i+1][0]*t);
+      }
+    }
+    return 0;
+  };
+
+  // —— 生成「外壳(树皮) + 内壳(暗面) + 洞口断面(厚度)」三件套 ——
+  function buildStump(){
+    const RINGS=68, ARC=88, SHELL=.042;
+    const outerP=[], outerUV=[], outerIdx=[];
+    const innerP=[], innerUV=[], innerIdx=[];
+    const rimP=[], rimIdx=[];
+    const v3=(theta,y,off)=>{ const r=rAt(y)+noiseAt(theta,y)+off;
+      return [r*Math.sin(theta), y, STUMP.zs+r*Math.cos(theta)]; };
+    for(let i=0;i<=RINGS;i++){
+      const y=STUMP.h*i/RINGS;
+      const hw=holeHalfW(y);
+      const tHalf=Math.min(Math.PI-.0001, hw/Math.max(.05,rAt(y)));   // 弧长→角度
+      for(let j=0;j<=ARC;j++){
+        const theta=tHalf+(Math.PI*2-2*tHalf)*(j/ARC);
+        const o=v3(theta,y,0), n=v3(theta,y,-SHELL);
+        outerP.push(o[0],o[1],o[2]); innerP.push(n[0],n[1],n[2]);
+        const u=theta/(Math.PI*2), v=y/STUMP.h;
+        outerUV.push(u,v); innerUV.push(u,v);
+      }
+    }
+    const W=ARC+1;
+    for(let i=0;i<RINGS;i++) for(let j=0;j<ARC;j++){
+      const a=i*W+j, b=a+1, c=a+W, d=c+1;
+      outerIdx.push(a,c,b, b,c,d);
+      innerIdx.push(a,b,c, b,d,c);          // 内壳反向绕序 → 从洞里看到的是内壁
+    }
+    // 洞口两侧断面：外壳边缘 → 内壳边缘
+    for(const side of [0,1]){
+      const base=rimP.length/3;
+      for(let i=0;i<=RINGS;i++){
+        const j = side? ARC : 0;
+        const oi=(i*W+j)*3, ni=oi;
+        rimP.push(outerP[oi],outerP[oi+1],outerP[oi+2]);
+        rimP.push(innerP[ni],innerP[ni+1],innerP[ni+2]);
+      }
+      for(let i=0;i<RINGS;i++){
+        const a=base+i*2, b=a+1, c=a+2, d=a+3;
+        if(side===0) rimIdx.push(a,b,c, b,d,c);
+        else         rimIdx.push(a,c,b, b,c,d);
+      }
+    }
+    const mk=(P,UV,I,mat,side)=>{
+      const g=new THREE.BufferGeometry();
+      g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+      if(UV) g.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));
+      if(I) g.setIndex(I);
+      g.computeVertexNormals();
+      // 首尾列（theta=0 与 2π）位置重合，把法线对齐消除接缝明暗线
+      {
+        const nrm=g.attributes.normal, W=ARC+1;
+        for(let i=0;i<=RINGS;i++){
+          const a=i*W, b=i*W+ARC;
+          const nx=(nrm.getX(a)+nrm.getX(b))/2, ny=(nrm.getY(a)+nrm.getY(b))/2, nz=(nrm.getZ(a)+nrm.getZ(b))/2;
+          nrm.setXYZ(a,nx,ny,nz); nrm.setXYZ(b,nx,ny,nz);
+        }
+        nrm.needsUpdate=true;
+      }
+      const m=new THREE.Mesh(g,mat); m.castShadow=true; m.receiveShadow=true;
+      m.material.side=side; forestGroup.add(m); return m;
+    };
+    const barkShellMat=new THREE.MeshStandardMaterial({map:barkTex,roughness:.92,metalness:0,side:THREE.DoubleSide});
+    mk(outerP,outerUV,outerIdx,barkShellMat,THREE.DoubleSide);
+    const innerMat=new THREE.MeshStandardMaterial({color:0x11141a,roughness:1,metalness:0,side:THREE.BackSide});
+    mk(innerP,innerUV,innerIdx,innerMat,THREE.BackSide);
+    const rimMat=new THREE.MeshStandardMaterial({map:barkTex,color:0x5d4d3e,roughness:1,side:THREE.DoubleSide});
+    mk(rimP,null,rimIdx,rimMat,THREE.DoubleSide);
+  }
+  buildStump();
+
   const capGeo=new THREE.CylinderGeometry(STUMP.rTop+.06,STUMP.rTop+.04,.12,STUMP.seg,4);
   const cp=capGeo.attributes.position,cv=new THREE.Vector3();
   for(let i=0;i<cp.count;i++){cv.fromBufferAttribute(cp,i);
@@ -638,13 +699,8 @@ scene.add(ground);
   capGeo.computeVertexNormals();
   put(capGeo,mossMat,[0,STUMP.h+.02,STUMP.zs]);
 
-  /* ---------- 树洞 ---------- */
-  // 树干曲面取点：hx=沿圆周的弧长、y=高度，off=沿法向的外扩量（负值向内）
-  const onTrunk=(hx,y,off=0)=>{
-    const r=rAt(y)+off, theta=hx/r;
-    return V(r*Math.sin(theta),y,STUMP.zs+r*Math.cos(theta));
-  };
-  // 装饰小洞：纯黑内腔 + 树皮唇边（平面 AO 圆片贴在曲面上会"浮"，已去掉）
+  /* ---------- 树洞（洞口已是树干的一部分，这里只保留取点工具与装饰小洞） ---------- */
+  // 装饰小洞：纯黑内腔 + 树皮唇边
   function den(theta,y,rad){
     const r=rAt(y);
     const parent=new THREE.Matrix4().compose(
@@ -654,61 +710,7 @@ scene.add(ground);
     putIn(parent,new THREE.TorusGeometry(rad,.017,8,28),barkMat,[0,0,.003]);
     putIn(parent,new THREE.TorusGeometry(rad+.015,.009,7,20,Math.PI),mossMat,[0,0,.012]);
   }
-  // 中央大入口：纯黑内腔 + 沿树干曲面走的树皮唇边（去掉原来的平面环/方柱贴片）
-  function bigEntrance(){
-    const TLEN=.62;
-    // 洞口轮廓（唇边与内腔共用同一套参数，保证严丝合缝）
-    const sideW=(y)=>{ const vy=y-(SPRING_Y-STUMP.h/2); return CUT_W*(1+.03*Math.sin(vy*9+2)); };
-    const archR=(a)=>CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3));
-    const frontZ=STUMP.zs+rAt(SPRING_Y);          // 起拱线处的树干表面 z
-    // 内腔：按洞口形状（矩形+半圆拱）拉伸出一个黑腔，内壁与后端都是同形状的黑面，
-    // 不再是"圆柱+圆盘"——那样从洞口看进去会出现一个突兀的黑色圆环/圆盘
-    {
-      // 实心黑色填充块：截面与洞口同形状，前端就在洞口平面上，向后延伸——
-      // 实心不透光，从任何角度看都只会看到"黑"，不会透出天空/草地（空心感的根源）
-      const PW=CUT_W-.015, zF=frontZ-.02, PL=.55, Y0=-.10;   // 截面略小于唇边外缘：黑面藏在唇边后面，同时盖住洞口边角漏色
-      const shp=new THREE.Shape();
-      shp.moveTo(-PW,Y0); shp.lineTo(PW,Y0); shp.lineTo(PW,SPRING_Y);
-      shp.absarc(0,SPRING_Y,PW,0,Math.PI,false); // 右 → 顶 → 左（顺序错了会导致封口三角化失败、正面没有面）
-      shp.lineTo(-PW,Y0);
-      const plugGeo=new THREE.ExtrudeGeometry(shp,{depth:PL,bevelEnabled:false,curveSegments:32});
-      plugGeo.rotateY(Math.PI);                   // 朝 -z 拉伸
-      plugGeo.translate(0,0,zF);
-      forestGroup.add(new THREE.Mesh(plugGeo,holeBackMat));
-      // 后面再补一层更大的暗幕：从洞口侧向斜看时，缝隙里也不会漏出夜空
-      const backPlate=new THREE.ShapeGeometry((()=>{const sh=new THREE.Shape();
-        const W=CUT_W+.09; sh.moveTo(-W,Y0); sh.lineTo(W,Y0); sh.lineTo(W,SPRING_Y);
-        sh.absarc(0,SPRING_Y,W,0,Math.PI,false); sh.lineTo(-W,Y0); return sh;})(),28);
-      backPlate.translate(0,0,zF-.09);
-      forestGroup.add(new THREE.Mesh(backPlate,holeBackMat));
-      // 洞内地面：与地面齐平的一条暗面，让洞口下沿平贴地面（不再露出草地）
-      const floorGeo=new THREE.PlaneGeometry(CUT_W*1.86,.30);
-      floorGeo.rotateX(-Math.PI/2);
-      floorGeo.translate(0,.006,frontZ-.155);
-      forestGroup.add(new THREE.Mesh(floorGeo,holeBackMat));
-    }
-    // 洞口唇边：树皮沿洞口卷起一圈，压住挖洞锯齿；两端埋进地面，避免出现"门框立柱"
-    // 唇边轮廓与挖洞完全同源：竖边按同一 wobble、拱顶按同一不规则半径，保证严丝合缝
-    // 一整圈同粗细的树皮卷边：右侧竖边 → 上拱 → 左侧竖边
-    const baseY=-.05, pts=[];
-    for(let y=baseY;y<=SPRING_Y;y+=.045) pts.push(onTrunk(sideW(y)+.004,y,.004));
-    for(let i=0;i<=28;i++){ const a=Math.PI*i/28, rr=archR(a)+.004;
-      pts.push(onTrunk(rr*Math.cos(a),SPRING_Y+rr*Math.sin(a),.004)); }
-    for(let y=SPRING_Y;y>=baseY;y-=.045) pts.push(onTrunk(-(sideW(y)+.004),y,.004));
-    put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',.12),150,.046,10,false),barkMat);
-    // 口沿上缘：扁平苔团贴着外缘，把洞口的轮廓继续打散
-    for(let i=0;i<=5;i++){
-      const a=Math.PI*(.18+.64*i/5), rr=archR(a)+.026, hx=rr*Math.cos(a), y=SPRING_Y+rr*Math.sin(a);
-      const pz=onTrunk(hx,y,.006);
-      put(new THREE.SphereGeometry(.045+Math.random()*.018,12,8),mossMat,
-        [pz.x,pz.y,pz.z],null,[1.35,.34,1]);
-    }
-    // 洞口的土坡门槛：把黑洞与草地之间那道人造硬边化开
-    const thr=onTrunk(0,.02,.012);
-    put(new THREE.SphereGeometry(.12,18,12),mossMat,[thr.x,.005,thr.z],null,[1.5,.22,.8]);
-  }
-  bigEntrance();
-  den(.34,.82,.06);   // 只保留右侧装饰小洞；左侧与拱顶相接的那个已按需求删除
+  den(.34,.82,.06);   // 右侧装饰小洞（与大洞相接的那个早已删除）
 
   /* ---------- 树桩表面苔藓斑块 ---------- */
   [[-.78,.42,.07,.05],[.78,.48,.06,.06],[-.62,.72,.08,.05],[.64,.8,.07,.06],
