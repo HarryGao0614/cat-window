@@ -163,6 +163,17 @@
   #soundBtn:hover{color:var(--amber);border-color:var(--amber)}
   #soundBtn.on{color:var(--amber);border-color:var(--amber)}
   @media (max-width:640px){ #soundBtn{top:148px;right:16px} }
+  /* 一键收起：互动指南 + 状态栏 */
+  #hideChromeBtn{
+    position:fixed;top:162px;right:26px;z-index:6;pointer-events:auto;cursor:pointer;
+    font-family:inherit;font-size:12px;letter-spacing:1px;color:var(--dim);
+    background:rgba(20,16,14,.55);border:1px solid var(--line);border-radius:30px;
+    padding:8px 14px;backdrop-filter:blur(6px);transition:color .2s,border-color .2s;
+  }
+  #hideChromeBtn:hover{color:var(--amber);border-color:var(--amber)}
+  #hideChromeBtn.on{color:var(--amber);border-color:var(--amber)}
+  body.chromeHidden #guide{display:none!important}
+  @media (max-width:640px){ #hideChromeBtn{top:192px;right:16px} }
   /* 标定遮罩 */
   #calibOverlay{
     display:none;position:fixed;inset:0;z-index:20;
@@ -246,6 +257,7 @@
   </svg>
   <span id="soundLabel">音乐开</span>
 </button>
+<button id="hideChromeBtn" type="button" aria-pressed="false" title="一键收起 / 展开互动指南与状态栏（H 键）">收起面板</button>
 
 <svg id="wand" aria-hidden="true">
   <defs>
@@ -437,7 +449,7 @@ window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
-const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=1.5, SNIFF_HOLD=2.0, SNIFF_BACK=1.4;   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
+const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=1.88, SNIFF_HOLD=2.0, SNIFF_BACK=1.75;   // 走近/退回再慢 20%   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -1409,6 +1421,22 @@ function updateMoodLabel(c){
   }
 }
 
+/* ---- 一键收起：互动指南 + 左侧状态栏（按钮或 H 键） ---- */
+{
+  const body=document.body, btn=document.getElementById('hideChromeBtn');
+  const sync=()=>{
+    const hidden=body.classList.contains('chromeHidden');
+    btn.classList.toggle('on',hidden);
+    btn.textContent=hidden?'显示面板':'收起面板';
+    btn.setAttribute('aria-pressed',hidden?'true':'false');
+  };
+  if(btn){
+    btn.addEventListener('click',e=>{ e.stopPropagation(); body.classList.toggle('chromeHidden'); sync(); });
+    addEventListener('keydown',e=>{ if(e.key==='h'||e.key==='H'){ body.classList.toggle('chromeHidden'); sync(); } });
+    sync();
+  }
+}
+
 /* ---- 左侧状态栏：可收起/展开（按钮或 Tab） ---- */
 {
   const panel=document.getElementById('panel'), btn=document.getElementById('panelToggle');
@@ -1802,13 +1830,13 @@ function updateActions(t, dt){
       if(STATE.actionCool<=0 && !busy){
         // 自由状态概率：坐着 > 站着 > 踩奶 > 抖毛 > 伸懒腰 = 扑玩
         const r=Math.random();
-        if(r<.30){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}          // 坐着 30%
-        else if(r<.54){STATE.actionCool=1.6+Math.random()*1.8;}                                       // 站着 24%（维持待机）
-        else if(r<.72){STATE.action='knead';STATE.actionT=0;}                                          // 踩奶 18%
-        else if(r<.84){STATE.action='shake';STATE.actionT=0;                                           // 抖毛 12%
+        if(r<.34){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}          // 坐着 34%
+        else if(r<.58){STATE.actionCool=1.6+Math.random()*1.8;}                                       // 站着 24%（维持待机）
+        else if(r<.685){STATE.action='knead';STATE.actionT=0;}                                        // 踩奶 10.5%
+        else if(r<.79){STATE.action='shake';STATE.actionT=0;                                          // 抖毛 10.5%
           STATE.shakeAmp=.85+Math.random()*.15;STATE.shakeDur=.95+Math.random()*.3;}
-        else if(r<.92){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 8%
-        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                       // 扑玩 8%
+        else if(r<.895){STATE.action='stretch';STATE.actionT=0;STATE.stretchSide=Math.random()<.5?-1:1;} // 伸懒腰 10.5%
+        else {STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};                      // 扑玩 10.5%
               STATE.action='pounce';STATE.actionT=0;}
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
@@ -2286,7 +2314,7 @@ const D=.09*c + .032*s;
       const Ltot=(L1+L2)*.999, hgt=Math.max(.04,S.y-groundY);
       const horiz=Math.sqrt(Math.max(0,Ltot*Ltot-hgt*hgt));
       let W=S.clone().addScaledVector(F,horiz*1.02*stReach).addScaledVector(LAT,sideSign*latSep);
-      W.y=groundY+.012;   // 掌面平铺在地面上（抬高 12mm，防止掌/前臂穿进地面）
+      W.y=groundY+.020;   // 掌面平铺在地面上（抬高 20mm，防止掌/前臂穿进地面）
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
       rel=rel.sub(lat);
@@ -2321,12 +2349,26 @@ const D=.09*c + .032*s;
       bc.updateWorldMatrix(true,false);
       const wQ0=bc.getWorldQuaternion(new THREE.Quaternion());
       const curZ0=new THREE.Vector3(0,0,1).applyQuaternion(wQ0);
-      const flatAng=Math.atan2(
+      let flatAng=Math.atan2(
         curZ0.dot(new THREE.Vector3().crossVectors(LAT,UP)), curZ0.dot(UP));
+      if(Math.abs(flatAng)>2.6) flatAng=0;          // 接近 ±π 时放弃修正，避免掌子翻转
       const corrQ=new THREE.Quaternion().setFromAxisAngle(LAT,flatAng);
       const newWQ0=corrQ.multiply(wQ0);
       const parQ0=bc.parent.getWorldQuaternion(new THREE.Quaternion());
       bc.quaternion.copy(parQ0.invert().multiply(newWQ0));
+      // 去掉绕掌轴的扭转：把掌本地 X 轴投影到地面后与侧向轴对齐，避免"歪斜扭曲"
+      bc.updateWorldMatrix(true,false);
+      const wQ1=bc.getWorldQuaternion(new THREE.Quaternion());
+      const curX=new THREE.Vector3(1,0,0).applyQuaternion(wQ1);
+      const xp=curX.clone().addScaledVector(UP,-curX.dot(UP));
+      if(xp.lengthSq()>1e-6){
+        xp.normalize();
+        const tgtX=LAT.clone().multiplyScalar((Math.sign(xp.dot(LAT))||1));
+        const roll=Math.atan2(xp.clone().cross(tgtX).dot(UP), xp.dot(tgtX));
+        const rq=new THREE.Quaternion().setFromAxisAngle(UP,roll);
+        const parQ1=bc.parent.getWorldQuaternion(new THREE.Quaternion());
+        bc.quaternion.copy(parQ1.invert().multiply(rq.multiply(wQ1)));
+      }
     };
     stretchOne('R'); stretchOne('L');
   }
@@ -2373,6 +2415,29 @@ const CatAudio=(()=>{
       for(let i=0;i<irLen;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,2.8); }
     conv.buffer=ir;
     const wet=ac.createGain(); wet.gain.value=.5; conv.connect(wet); wet.connect(ambMaster);
+    // ---- 环境声：风声（低通噪声 + 缓慢起伏）----
+    const noiseLen=Math.floor(ac.sampleRate*4), nbuf=ac.createBuffer(1,noiseLen,ac.sampleRate);
+    { const d=nbuf.getChannelData(0); for(let i=0;i<noiseLen;i++) d[i]=Math.random()*2-1; }
+    const windSrc=ac.createBufferSource(); windSrc.buffer=nbuf; windSrc.loop=true;
+    const windLp=ac.createBiquadFilter(); windLp.type='lowpass'; windLp.frequency.value=420; windLp.Q.value=.3;
+    const windG=ac.createGain(); windG.gain.value=.055;
+    const windLfo=ac.createOscillator(); windLfo.type='sine'; windLfo.frequency.value=.09;
+    const windLfoG=ac.createGain(); windLfoG.gain.value=.032;
+    windLfo.connect(windLfoG); windLfoG.connect(windG.gain);
+    windSrc.connect(windLp); windLp.connect(windG); windG.connect(ambMaster); windG.connect(conv);
+    windSrc.start(); windLfo.start();
+    // ---- 环境声：夏夜蝉鸣（带通噪声 + 40Hz 颤音 + 约 11s 一次的强弱包络）----
+    const cicSrc=ac.createBufferSource(); cicSrc.buffer=nbuf; cicSrc.loop=true;
+    const cicLp=ac.createBiquadFilter(); cicLp.type='bandpass'; cicLp.frequency.value=4600; cicLp.Q.value=3.2;
+    const cicG=ac.createGain(); cicG.gain.value=.028;
+    const trem=ac.createOscillator(); trem.type='sine'; trem.frequency.value=38;
+    const tremG=ac.createGain(); tremG.gain.value=.016;
+    trem.connect(tremG); tremG.connect(cicG.gain);
+    const swell=ac.createOscillator(); swell.type='sine'; swell.frequency.value=.075;
+    const swellG=ac.createGain(); swellG.gain.value=.012;
+    swell.connect(swellG); swellG.connect(cicG.gain);
+    cicSrc.connect(cicLp); cicLp.connect(cicG); cicG.connect(ambMaster); cicG.connect(conv);
+    cicSrc.start(); trem.start(); swell.start();
     // 垫音：低通滤波的三音和弦，9 秒换一次，慢速滑音
     const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1150; lp.Q.value=.4;
     const pad=ac.createGain(); pad.gain.value=.12; lp.connect(pad); pad.connect(ambMaster); pad.connect(conv);
@@ -2429,12 +2494,12 @@ const CatAudio=(()=>{
     if(!built||!unlocked) return;
     const p=Math.max(0,Math.min(1,purrLevel));
     const fade=Math.max(0,Math.min(1,fadeIn));
-    const purrTarget=(.25+.75*p)*.72*.95*.85*fade;  // 呼噜再降 15%，随 walkIn 渐入
+    const purrTarget=(.25+.75*p)*.72*.95*.85*.7*fade;  // 呼噜再降 30%，随 walkIn 渐入
     purrEl.volume+=(purrTarget-purrEl.volume)*Math.min(1,dt*6);
     if(purrEl.paused) tryPlay(purrEl);
     const mt=(musicEnabled?.26:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
     if(ambBuilt && ambMaster){
-      ambMaster.gain.setTargetAtTime(mt*.85, ac.currentTime, .6);
+      ambMaster.gain.setTargetAtTime(mt*1.105, ac.currentTime, .6);   // 整体音量 +30%
     } else if(musicEl){
       musicEl.volume+=(mt-musicEl.volume)*Math.min(1,dt*4);
       if(musicEnabled&&musicEl.paused) tryPlay(musicEl);
