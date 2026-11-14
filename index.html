@@ -32,9 +32,10 @@
   #ambient{
     position:fixed;inset:0;pointer-events:none;
     background:
-      radial-gradient(120% 90% at 18% 12%, rgba(200,155,106,.14), transparent 55%),
-      radial-gradient(140% 120% at 85% 110%, rgba(127,176,105,.05), transparent 60%),
-      linear-gradient(160deg,#241d19 0%,#171210 55%,#100d0c 100%);
+      radial-gradient(120% 90% at 18% 10%, rgba(96,150,255,.22), transparent 58%),
+      radial-gradient(90% 70% at 82% 20%, rgba(64,120,220,.16), transparent 60%),
+      radial-gradient(140% 120% at 85% 110%, rgba(40,90,170,.12), transparent 65%),
+      linear-gradient(160deg,#0b1830 0%,#0a1324 50%,#05080f 100%);
   }
 
   /* 顶部标题 */
@@ -259,8 +260,8 @@
   </g>
 </svg>
 
-<div id="guide">
-  <div id="guideHead" role="button" tabindex="0" aria-expanded="false" aria-controls="guideBody">
+<div id="guide" class="open">
+  <div id="guideHead" role="button" tabindex="0" aria-expanded="true" aria-controls="guideBody">
     <span class="gt">互动指南</span><span class="gchev">▾</span>
   </div>
   <div id="guideBody">
@@ -278,8 +279,9 @@
     <h4>看猫猫模式 · 手势</h4>
     <ul>
       <li><b>张开手掌抬起靠近</b>：猫咪举爪对掌，吸附你的手腕</li>
+      <li><b>手在画面内快速晃动</b>：猫咪开心地左右蹦两下再回原位</li>
       <li><b>手在画面内移动</b>：猫咪注意并跟随你的手</li>
-      <li><b>伸手遮住脸 / 抚摸镜头</b>：猫咪闭眼、放松享受</li>
+      <li><b>抚摸镜头</b>（手在镜头前缓慢移动、遮住脸）：猫咪闭眼、放松享受</li>
     </ul>
     <h4>逗猫棒模式</h4>
     <ul>
@@ -299,7 +301,8 @@
   <div id="calibDot"></div>
   <div id="calibInfo">
     <div id="calibTitle">视线标定</div>
-    <div id="calibHint">请依次注视出现的圆点，保持头部自然、不要移动身体；每个圆点停留约 1 秒</div>
+    <div id="calibHint">把整张脸放进画面中央、光线照在脸上，头部保持不动，然后<b>只用眼睛</b>依次看向出现的光点。<br>
+      光点不会前进？说明没检测到人脸——靠近一点、把脸放到画面中间，或点右下角「跳过标定」。</div>
     <div id="calibCount"></div>
     <button id="calibSkip" type="button">跳过标定</button>
   </div>
@@ -326,6 +329,8 @@
   <p id="camErr" role="alert"></p>
   <button id="mouseBtn" class="ghost">先用逗猫棒看看</button>
   <div class="hint">不开启摄像头也能挥动逗猫棒，让猫的眼睛跟着棒尖</div>
+  <div class="hint" id="loadHint">首次打开要先下载约 15&nbsp;MB 的识别模型，请耐心等 10~30 秒（按钮会显示“正在加载识别模型…”）。<br>
+  如果点「开启摄像头」后一直没反应，多半是权限弹窗被拦住了：点地址栏左侧的摄像头图标允许权限，或直接刷新页面重新打开。</div>
 </div>
 
 <script type="importmap">
@@ -403,6 +408,7 @@ const STATE = {
   noticeT:0,              // notice（指向手势）的警觉停顿计时
   _pinchHeld:false,       // 上一帧是否处于捏合（用于上升沿触发，避免持续捏合反复扑玩）
   pounceCool:0,           // 扑玩结束后的冷却
+  hopCool:0, hopDir:1, _hopY:0,   // 夸张互动：左右蹦两下的冷却/方向/离地高度
   // 去抖门控（降低切换灵敏度）与对视状态
   _gates:{presence:mkGate(),point:mkGate()},
   mutual:{active:false,inT:0,outT:0},   // 对视：用户看向猫才回看，非连续跟随
@@ -472,7 +478,7 @@ scene.add(rim);
 
 scene.add(new THREE.AmbientLight(0x2c382a, .45));
 scene.environmentIntensity=.4;
-scene.fog=new THREE.FogExp2(0x1c2a1c, .32);   // 森系纵深雾
+scene.fog=new THREE.FogExp2(0x0a1626, .30);   // 深蓝夜空雾气
 
 /* 地面：承接阴影的暖暗垫面，不做镜面 */
 const ground = new THREE.Mesh(
@@ -564,7 +570,8 @@ scene.add(ground);
   const mossMat=mat({map:mossStumpTex,roughness:.98});
   const barkMat=mat({map:barkTex,roughness:.92});
 
-  const holeVoidMat=new THREE.MeshBasicMaterial({color:0x000000,fog:false});   // 纯黑内腔：不吃光照、不受雾影响
+  const holeVoidMat=new THREE.MeshBasicMaterial({color:0x000000,fog:false,side:THREE.BackSide});   // 纯黑内壁（只看内面）
+  const holeBackMat=new THREE.MeshBasicMaterial({color:0x000000,fog:false,side:THREE.DoubleSide}); // 实心黑块（正反面都算不透明黑）
   const rimWoodMat=mat({color:0x57412d,roughness:1});
   const cushionMat=mat({color:0x9c7c5e,roughness:1});
   const creamMat=mat({color:0xefe6d2,roughness:.85});
@@ -574,7 +581,7 @@ scene.add(ground);
   const leafMat=mat({color:0x4f7a3c,roughness:.85,side:THREE.DoubleSide});
   const leafDarkMat=mat({color:0x35552c,roughness:.9,side:THREE.DoubleSide});
   const flowerMats=[0x9b6bb0,0xb07fc4,0xd78fb8,0x8a5aa0].map(c=>mat({color:c,roughness:.8}));
-  const glowMat=mat({color:0xffd9a0,emissive:0xffd9a0,emissiveIntensity:3});
+  const glowMat=mat({color:0xffe6b8,emissive:0xffe6b8,emissiveIntensity:5.2});
 
   /* ---------- 场景组（整体微缩） ---------- */
   const FOREST_SCALE=.48;
@@ -592,7 +599,7 @@ scene.add(ground);
   const STUMP={rTop:.42,rBot:.58,h:1.02,seg:48,zs:-.58};
   // 中央大入口：矩形+半圆拱（竖直段 RECT_H + 上半圆 ARCH_W），增高防穿模；挖洞 CUT_W 略大
   const SPRING_Y=.34, ARCH_W=.28, RECT_H=.30, CUT_W=.33;
-  const stumpGeo=new THREE.CylinderGeometry(STUMP.rTop,STUMP.rBot,STUMP.h,STUMP.seg,12);
+  const stumpGeo=new THREE.CylinderGeometry(STUMP.rTop,STUMP.rBot,STUMP.h,STUMP.seg,20);
   const sp=stumpGeo.attributes.position,sv=new THREE.Vector3();
   for(let i=0;i<sp.count;i++){
     sv.fromBufferAttribute(sp,i);
@@ -611,7 +618,7 @@ scene.add(ground);
       let theta=Math.PI/2-ang;                 // 几何 ang 转 den 的 theta（前=0）
       theta=Math.atan2(Math.sin(theta),Math.cos(theta));
       const hx=baseR*theta, vy=v.y-(SPRING_Y-STUMP.h/2);   // 拱的起拱线为 v=0
-      if(vy< -RECT_H-.02) return false;         // 矩形底以下不挖
+      if(vy< -RECT_H-.08) return false;         // 一直挖到地面以下，避免底部留锯齿獠牙
       if(vy>=0){ const a=Math.atan2(vy,hx||1e-6);          // 拱顶：半径带轻微起伏，避免完美圆
         return Math.hypot(hx,vy) < CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3)); }
       return Math.abs(hx) < CUT_W*(1+.03*Math.sin(vy*9+2));};   // 竖边：略微鼓/收
@@ -649,25 +656,35 @@ scene.add(ground);
   }
   // 中央大入口：纯黑内腔 + 沿树干曲面走的树皮唇边（去掉原来的平面环/方柱贴片）
   function bigEntrance(){
-    const TINNER=.315, TLEN=.66;
-    const frontZ=STUMP.zs+rAt(SPRING_Y);          // 起拱线处的树干表面 z
-    // 内腔整体后移，保证圆柱前缘始终藏进树皮里（原先前缘在拱顶处探出树干，猫走过就有穿模感）
-    put(new THREE.CylinderGeometry(TINNER,TINNER,TLEN,36,1,true),holeVoidMat,
-      [0,SPRING_Y,frontZ-.06-TLEN/2],[Math.PI/2,0,0]);
-    put(unitCircle,holeVoidMat,[0,SPRING_Y,frontZ-.06-TLEN],null,[TINNER,TINNER,1]);
-    // 洞口唇边：树皮沿洞口卷起一圈，压住挖洞锯齿；两端埋进地面，避免出现"门框立柱"
-    // 唇边轮廓与挖洞完全同源：竖边按同一 wobble、拱顶按同一不规则半径，保证严丝合缝
+    const TLEN=.62;
+    // 洞口轮廓（唇边与内腔共用同一套参数，保证严丝合缝）
     const sideW=(y)=>{ const vy=y-(SPRING_Y-STUMP.h/2); return CUT_W*(1+.03*Math.sin(vy*9+2)); };
     const archR=(a)=>CUT_W*(1+.042*Math.sin(a*3+1.1)+.026*Math.sin(a*5+2.3));
-    const baseY=-.05, archPts=[], leftPts=[], rightPts=[];
-    for(let i=0;i<=26;i++){ const a=Math.PI*i/26, rr=archR(a)+.004;
-      archPts.push(onTrunk(rr*Math.cos(a),SPRING_Y+rr*Math.sin(a),.006)); }
-    for(let y=SPRING_Y;y>=baseY;y-=.045){ rightPts.push(onTrunk(sideW(y)+.004,y,.002)); leftPts.push(onTrunk(-(sideW(y)+.004),y,.002)); }
-    // 上拱：树皮卷边更厚更外凸（视线主要落在这里）
-    put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPts,false,'catmullrom',.12),90,.046,10,false),barkMat);
-    // 两侧竖边：细一点、贴得紧一点，避免在树干轮廓处读成独立木柱
-    for(const sp of [leftPts,rightPts])
-      put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp,false,'catmullrom',.12),40,.026,8,false),barkMat);
+    const frontZ=STUMP.zs+rAt(SPRING_Y);          // 起拱线处的树干表面 z
+    // 内腔：按洞口形状（矩形+半圆拱）拉伸出一个黑腔，内壁与后端都是同形状的黑面，
+    // 不再是"圆柱+圆盘"——那样从洞口看进去会出现一个突兀的黑色圆环/圆盘
+    {
+      // 实心黑色填充块：截面与洞口同形状，前端就在洞口平面上，向后延伸——
+      // 实心不透光，从任何角度看都只会看到"黑"，不会透出天空/草地（空心感的根源）
+      const PW=CUT_W-.05, zF=frontZ-.02, PL=.55, Y0=-.10;    // 截面略小于唇边内径：黑面藏在唇边后面，不会探出树皮
+      const shp=new THREE.Shape();
+      shp.moveTo(-PW,Y0); shp.lineTo(PW,Y0); shp.lineTo(PW,SPRING_Y);
+      shp.absarc(0,SPRING_Y,PW,0,Math.PI,false); // 右 → 顶 → 左（顺序错了会导致封口三角化失败、正面没有面）
+      shp.lineTo(-PW,Y0);
+      const plugGeo=new THREE.ExtrudeGeometry(shp,{depth:PL,bevelEnabled:false,curveSegments:32});
+      plugGeo.rotateY(Math.PI);                   // 朝 -z 拉伸
+      plugGeo.translate(0,0,zF);
+      forestGroup.add(new THREE.Mesh(plugGeo,holeBackMat));
+    }
+    // 洞口唇边：树皮沿洞口卷起一圈，压住挖洞锯齿；两端埋进地面，避免出现"门框立柱"
+    // 唇边轮廓与挖洞完全同源：竖边按同一 wobble、拱顶按同一不规则半径，保证严丝合缝
+    // 一整圈同粗细的树皮卷边：右侧竖边 → 上拱 → 左侧竖边
+    const baseY=-.05, pts=[];
+    for(let y=baseY;y<=SPRING_Y;y+=.045) pts.push(onTrunk(sideW(y)+.004,y,.004));
+    for(let i=0;i<=28;i++){ const a=Math.PI*i/28, rr=archR(a)+.004;
+      pts.push(onTrunk(rr*Math.cos(a),SPRING_Y+rr*Math.sin(a),.004)); }
+    for(let y=SPRING_Y;y>=baseY;y-=.045) pts.push(onTrunk(-(sideW(y)+.004),y,.004));
+    put(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',.12),150,.046,10,false),barkMat);
     // 口沿上缘：扁平苔团贴着外缘，把洞口的轮廓继续打散
     for(let i=0;i<=5;i++){
       const a=Math.PI*(.18+.64*i/5), rr=archR(a)+.026, hx=rr*Math.cos(a), y=SPRING_Y+rr*Math.sin(a);
@@ -816,12 +833,26 @@ scene.add(ground);
     for(let i=0;i<n;i++){pos[i*3]=rnd(-1.3,1.3);pos[i*3+1]=rnd(.15,.85);pos[i*3+2]=rnd(-1.2,.5);ph[i]=Math.random();}
     twinklePoints(pos,ph,0xd7ff9a,1.4,.05);
   }
+  // 月亮：夜空里的一轮冷白，带加性光晕
+  {
+    const moonMat=new THREE.MeshBasicMaterial({color:0xe4ecff,fog:false});
+    const moon=new THREE.Mesh(new THREE.SphereGeometry(.16,24,18),moonMat);
+    moon.position.set(-1.15,1.38,-2.35); forestGroup.add(moon);
+    const haloTex=tex((()=>{const c=canvas(128,128),x=c.getContext('2d');
+      const g=x.createRadialGradient(64,64,2,64,64,62);
+      g.addColorStop(0,'rgba(200,220,255,.75)');g.addColorStop(.35,'rgba(150,185,255,.22)');
+      g.addColorStop(1,'rgba(120,160,255,0)');
+      x.fillStyle=g;x.fillRect(0,0,128,128);return c;})());
+    const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,transparent:true,
+      blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+    halo.scale.setScalar(1.6); halo.position.copy(moon.position); forestGroup.add(halo);
+  }
   // 星星：背景夜空，冷白，轻微闪烁不漂移
   {
     const n=80,pos=new Float32Array(n*3),ph=new Float32Array(n);
     for(let i=0;i<n;i++){
       pos[i*3]=rnd(-2.3,2.3);pos[i*3+1]=rnd(.7,1.5);pos[i*3+2]=rnd(-2.4,-.7);ph[i]=Math.random();}
-    twinklePoints(pos,ph,0xdfe8ff,1.1,0);
+    twinklePoints(pos,ph,0xe6efff,1.6,0);
   }
   return points;
 })();
@@ -1228,7 +1259,7 @@ function clampFootToGround(b, groundY){
 }
 
 /* ---- 状态文字：蹲伏/惊讶优先，其余用动作中文名 ---- */
-const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',pawplay:'抬爪玩',
+const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',pawplay:'抬爪玩',hop:'蹦跳',
                      pounce:'扑玩',sit:'坐着',shake:'抖毛',notice:'发现你了'};
 function updateMoodLabel(c){
   let mood;
@@ -1576,6 +1607,13 @@ function updateActions(t, dt){
     STATE.action='pounce';STATE.actionT=0;
   }
   STATE._pinchHeld=pinchNow;
+  // 夸张互动：手在画面里快速晃动时，猫开心地左右蹦两下再回原位（仅互动态）
+  if(STATE.hopCool>0) STATE.hopCool-=dt;
+  if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='hop'
+     && STATE.hopCool<=0 && hSpd>1.8 && STATE.pawLift.L<.1 && STATE.pawLift.R<.1){
+    STATE.action='hop'; STATE.actionT=0;
+    STATE.hopDir=Math.random()<.5?-1:1; STATE.hopCool=2.6;
+  }
   if(STATE.clickPounce){
     STATE.clickPounce=false;
     if(STATE.pounceCool<=0 && STATE.action!=='pounce' && STATE.top==='engaged'){
@@ -1609,9 +1647,9 @@ function updateActions(t, dt){
       if(STATE.actionT>=STATE.actionDur){ toIdle(); }
     }
   };
-  if(STATE.top==='free' && STATE.action!=='walkIn' && STATE.action!=='pounce'){
+  if(STATE.top==='free' && STATE.action!=='walkIn' && STATE.action!=='pounce' && STATE.action!=='hop'){
     runAutonomous();              // 自由态（含冷却）：原地自理，不看你
-  } else if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='walkIn'){
+  } else if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='walkIn' && STATE.action!=='hop'){
     // 互动态：指向 point 给正面警觉反应；其余时间承接日常自理（含抖毛/伸懒腰等），与互动叠加
     const pointCond = gNow==='point';
     const wasPoint = G.point.on;
@@ -1678,6 +1716,14 @@ function updateActions(t, dt){
   // walkIn 已在状态机块沿 z 直走；pounce 压低后前扑（只沿 z 朝屏幕，无转向）
   const act=STATE.action;
   if(act==='pounce') STATE.actionT+=dt;  // pounce 在状态机外计时
+  if(act==='hop'){                       // 左右蹦两下：1.1s 包络，末尾回到原点
+    STATE.actionT+=dt;
+    const HOP_D=1.1, k=Math.min(1,STATE.actionT/HOP_D);
+    const env=Math.sin(Math.PI*k);
+    STATE.moveX=STATE.hopDir*(Math.sin(k*Math.PI*2)*.045*env+.02*env);
+    STATE._hopY=Math.abs(Math.sin(k*Math.PI*2))*.042*env;
+    if(STATE.actionT>=HOP_D){ STATE.moveX=0; STATE._hopY=0; toIdle(); }
+  }
   const at=STATE.actionT;
   // 伸懒腰包络：stReach=前伸、stArch=弓背；全程共用一份（原代码在三处重复计算）
   let stReach=0, stArch=0;
@@ -1697,8 +1743,8 @@ function updateActions(t, dt){
     else if(at<1.7){ STATE.moveZ=JOIN_Z+PEAK*(1-eIO((at-1.05)/.65)); }
     else { STATE.moveZ=JOIN_Z; toIdle(); STATE.pounceCool=.6; }
     // 横向朝点击点轻 lean（不转向、不挪步），随前扑/退回同包络，结束归零
-    const leanPeak=(STATE.pounceTarget.x-.5)*.06;
-    STATE.moveX=((STATE.moveZ-JOIN_Z)/PEAK)*leanPeak;
+    const leanPeak=(STATE.pounceTarget.x-.5)*.12;          // 朝点击点方向的横向扑幅（左右各 ±.06）
+    STATE.moveX=THREE.MathUtils.clamp((STATE.moveZ-JOIN_Z)/PEAK,0,1)*leanPeak;
   }
   // 步态：walkIn 直走时启用脚部步态（沿 z 前进，不整身滑动），pounce 走专属逻辑
   const feetOn = act==='walkIn';
@@ -1754,12 +1800,14 @@ const D=.09*c + .032*s;
     stPitch=.18*clamp01(at/.7)*clamp01((2.6-at)/.6); }
   rig.root.position.set(
     STATE.moveX + swayLat*Math.cos(GAIT.yaw),
-    -D+bob-GAIT.turnDip-stDip+breathY,
+    -D+bob-GAIT.turnDip-stDip+breathY+STATE._hopY,
     STATE.moveZ - swayLat*Math.sin(GAIT.yaw)
   );
   const sway=(1-c*.6)*(1-moving*.7)*motion;
   rig.root.rotation.y=GAIT.yaw+stYaw;
-  rig.root.rotation.z=Math.sin(t*.55)*.016*sway + .010*Math.sin(GAIT.phi*Math.PI*2)*gw + GAIT.bank;
+  // 扑玩时的侧倾：朝扑的方向压一下，读作"斜着扑出去"
+  const pounceBank = act==='pounce' ? -(STATE.pounceTarget.x-.5)*.16*Math.min(1,at/.35)*(at>1.05?Math.max(0,1-(at-1.05)/.65):1) : 0;
+  rig.root.rotation.z=Math.sin(t*.55)*.016*sway + .010*Math.sin(GAIT.phi*Math.PI*2)*gw + GAIT.bank + pounceBank;
   // 呼吸时躯干随起伏轻微俯仰，配合胸腔起伏
   rig.root.rotation.x=Math.sin(t*.42)*.011*sway + STATE._breathPhase*.005 + stPitch;
 
@@ -1930,10 +1978,10 @@ const D=.09*c + .032*s;
   const _sh0=rig.earMat.userData.shader;
   if(_sh0) _sh0.uniforms.uStretch.value=0;
   if(act==='stretch'){
-    sA=-.14*stReach-.20*stArch;            // 胸段下压收小，避免宽胸压到肩/腿根造成穿插
+    sA=-.16*stReach-.26*stArch;            // 胸段下压收小，避免宽胸压到肩/腿根造成穿插
     // 头部独立修正：整个头部轻微抬起、猫脸向上（真猫伸懒腰常闭眼享受），彻底离开肩窝/胸前不穿模；
     // 前伸与弓背阶段都保持抬头，弓背略强
-    stHead=.40*stReach+.85*stArch;
+    stHead=.46*stReach+.98*stArch;
     // 胸口随动作收窄：前伸与弓背都保持，弓背略强，clamp 到 1
     if(rig.earMat.userData.shader)
       rig.earMat.userData.shader.uniforms.uStretch.value=Math.min(1, stReach+.35*stArch);
@@ -1974,7 +2022,7 @@ const D=.09*c + .032*s;
     const dur=STATE.shakeDur||.8,amp=STATE.shakeAmp||1,env=Math.sin(Math.PI*Math.min(STATE.actionT/dur,1));
     const w=Math.sin(STATE.actionT*Math.PI*2*9.5);
     shYaw=w*.05*amp*env;
-    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.07*amp*env;
+    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.075*amp*env;
     shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.015*amp*env;
     shRoot=w*.03*amp*env;
     rig.root.rotation.z+=shRoot;
@@ -1995,7 +2043,7 @@ const D=.09*c + .032*s;
     };
     applySway('Bone001',.55);   // 下脊柱明显抖动（抖身上的毛）
     applySway('Bone002',.85);   // 上半身（胸段）主抖
-    applySway('Bone004',.15);   // 头部仅轻微跟随，不再主导抖脑袋
+    applySway('Bone004',-.95);  // 头部与身体反向抖（真猫抖毛是"头往左、身子往右"）
   }
   // 头部稳定：root 步态起伏多少，头部控制骨反向平移抵消，保持水平（参考视频头部异常稳定）
   const headB=rig.bones['Bone004'];
@@ -2020,7 +2068,7 @@ const D=.09*c + .032*s;
       const sideSign=Math.sign(S.dot(LAT))||1;
       const latSep=stReach*.0124;   // 每掌额外外分约为前送量的 8%，两掌分开、减少与宽胸穿插
       // 目标：从肩沿身体前向送出并向外分，掌落在地面（y=groundY），前向距离随 stReach 增大
-      let W=S.clone().addScaledVector(F,stReach*.135).addScaledVector(LAT,sideSign*latSep); W.y=groundY;
+      let W=S.clone().addScaledVector(F,stReach*.158).addScaledVector(LAT,sideSign*latSep); W.y=groundY;
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
       rel=rel.sub(lat);
@@ -2140,7 +2188,7 @@ function loop(){
   // 洞内压暗：z 越靠里越暗（-0.03 起、-0.14 到底，最暗 20%），走出洞口逐渐恢复
   if(rig.catMats){
     const deep=THREE.MathUtils.clamp((-.03-STATE.moveZ)/.11,0,1);
-    const k=1-.80*deep;
+    const k=1-.52*deep;   // 最暗 48%，既能读作“从暗处出来”，脸也不至于糊成黑块
     for(const m of rig.catMats) m.color.copy(m.userData._baseColor).multiplyScalar(k);
   }
   calibTick(dt);
