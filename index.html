@@ -270,6 +270,7 @@
       <li><b>正对镜头停留</b>：触发对视，猫咪软回看、慢眨眼（猫咪之吻）</li>
       <li><b>眨眼</b>：猫咪回你一个慢眨眼</li>
       <li><b>点头</b>：猫咪会跟着你一起点头（上下回应）</li>
+      <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻你</li>
       <li><b>摇头</b>：猫咪好奇地抖耳、轻瞟</li>
     </ul>
     <h4>看猫猫模式 · 手势</h4>
@@ -394,6 +395,7 @@ const STATE = {
   actionCool:1.5,         // 自主活动间隔（开局很快开始走动）
   walkPhase:0,            // 四腿步态相位
   moveX:0, moveZ:-.4,     // 开场在树洞内远处位（随后由 FAR_Z 覆盖）；walkIn 走到 JOIN_Z 定点；pounce 只沿 z 朝屏幕
+  sniffCool:0, _smileT:0, // 微笑嗅闻互动：冷却 / 微笑持续时间
   happy:0,                // 开心反应量（剪刀手/微笑）
   startle:0,              // 惊讶量（张嘴）
   expr:{mouth:0, smile:0, near:0},  // 人脸表情平滑量
@@ -421,7 +423,8 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
-const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
+const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
+const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=1.5, SNIFF_HOLD=2.0, SNIFF_BACK=1.4;   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=20;                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -921,12 +924,12 @@ const appleSwingList=(()=>{
     const mat=new THREE.ShaderMaterial({
       uniforms:{uTime:{value:0},uColor:{value:new THREE.Color(color)},uSize:{value:size}},
       vertexShader:'attribute float aPhase;uniform float uTime,uSize;varying float vA;'+
-        'void main(){vA=.72+.28*sin(uTime*1.7+aPhase*6.2831);'+
+        'void main(){vA=.4+.6*sin(uTime*1.7+aPhase*6.2831);'+
         'vec4 mv=modelViewMatrix*vec4(position,1.0);'+
-        'gl_PointSize=min(uSize*(240.0/max(.001,-mv.z)),64.0);gl_Position=projectionMatrix*mv;}',
+        'gl_PointSize=min(uSize*(240.0/max(.001,-mv.z)),40.0);gl_Position=projectionMatrix*mv;}',
       fragmentShader:'uniform vec3 uColor;varying float vA;'+
         'void main(){float r=length(gl_PointCoord-0.5);'+
-        'gl_FragColor=vec4(uColor*1.6,smoothstep(.44,0.04,r)*vA);}',
+        'gl_FragColor=vec4(uColor,smoothstep(.5,0.0,r)*vA);}',
       transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
     const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;
     pts.onBeforeRender=()=>{const t=performance.now()/1000;mat.uniforms.uTime.value=t;
@@ -946,7 +949,7 @@ const appleSwingList=(()=>{
       while(Math.hypot(x, z-STUMP.zs) < rAt(.55)+.14);
       pos[i*3]=x;pos[i*3+1]=rnd(.15,.85);pos[i*3+2]=z;ph[i]=Math.random();
     }
-    twinklePoints(pos,ph,0xe8ffa4,4.5,.06);   // 萤火虫：更大更亮（光点略收保证有核心）
+    twinklePoints(pos,ph,0xd9ff8a,3.4,.06);
   }
   // 月亮：夜空里的一轮冷白，带加性光晕
   {
@@ -1378,7 +1381,7 @@ function clampFootToGround(b, groundY){
 }
 
 /* ---- 状态文字：蹲伏/惊讶优先，其余用动作中文名 ---- */
-const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',hop:'蹦跳',
+const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',hop:'蹦跳',sniff:'凑近闻闻',
                      pounce:'扑玩',sit:'坐着',shake:'抖毛',notice:'发现你了'};
 function updateMoodLabel(c){
   let mood;
@@ -1619,6 +1622,15 @@ function updateActions(t, dt){
   if(fgEv.shake!==rp._last.shake){
     rp._last.shake=fgEv.shake;
     if(claim(1.0)){ rp.shake=1; rp.shakeSide=fgEv.turnSide||rp.shakeSide; }
+  }
+  // 微笑互动：连续微笑 0.5s → 猫走近镜头闻一闻（冷却 9s，结束自动退回定点）
+  if(STATE.sniffCool>0) STATE.sniffCool-=dt;
+  const _f=STATE.face;
+  if(_f && _f.active && (_f.smile||0)>SMILE_THRESH) STATE._smileT=(STATE._smileT||0)+dt;
+  else STATE._smileT=0;
+  if(STATE._smileT>.5 && STATE.sniffCool<=0 && STATE.top==='engaged'
+     && STATE.action==='idle' && STATE.hasJoined){
+    STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=9; STATE._smileT=0;
   }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
@@ -1876,6 +1888,14 @@ function updateActions(t, dt){
   }
   let moving=0;
   if(act==='walkIn'){ moving=1; }
+  if(act==='sniff'){
+    const eIO=k=>k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;
+    const T1=SNIFF_WALK, T2=T1+SNIFF_HOLD, T3=T2+SNIFF_BACK;
+    if(at<T1){ STATE.moveZ=JOIN_Z+(SNIFF_Z-JOIN_Z)*eIO(at/T1); moving=1; }
+    else if(at<T2){ STATE.moveZ=SNIFF_Z; }
+    else if(at<T3){ STATE.moveZ=SNIFF_Z-(SNIFF_Z-JOIN_Z)*eIO((at-T2)/SNIFF_BACK); moving=1; }
+    else { STATE.moveZ=JOIN_Z; toIdle(); STATE.sniffCool=9; }
+  }
   if(act==='pounce'){
     // 分阶段：蹲伏蓄力 → 弹道前扑（减速 ease-out）→ 落地短暂停顿 → 平滑退步回位
     const PEAK=.14;
@@ -1890,9 +1910,9 @@ function updateActions(t, dt){
     STATE.moveX=THREE.MathUtils.clamp((STATE.moveZ-JOIN_Z)/PEAK,0,1)*leanPeak;
   }
   // 兜底：蹦跳/扑玩被其它状态打断时，横向偏移必须归零，否则猫会卡在偏离定点的位置
-  if(act!=='hop' && act!=='pounce' && act!=='walkIn') STATE.moveX=damp(STATE.moveX,0,12,dt);
+  if(act!=='hop' && act!=='pounce' && act!=='walkIn' && act!=='sniff') STATE.moveX=damp(STATE.moveX,0,12,dt);
   // 步态：walkIn 直走时启用脚部步态（沿 z 前进，不整身滑动），pounce 走专属逻辑
-  const feetOn = act==='walkIn';
+  const feetOn = act==='walkIn' || (act==='sniff' && moving>0);
   GAIT.effStride=damp(GAIT.effStride,GAIT.stride,8,dt);
   if(GAIT.prevX===null){ GAIT.prevX=STATE.moveX; GAIT.prevZ=STATE.moveZ; }
   const ddx=STATE.moveX-GAIT.prevX, ddz=STATE.moveZ-GAIT.prevZ, stepLen=Math.hypot(ddx,ddz);
@@ -2135,6 +2155,14 @@ const D=.09*c + .032*s;
     else sA=.05*Math.max(0,1-(at-1.05)/.65);           // 退步回正
   }
   else if(act==='notice'){ sA=.10; }   // 发现瞬间上身微挺、抬头警觉
+  else if(act==='sniff'){
+    // 闻：身体前探、头前伸贴近镜头，鼻子做轻微快速抽动
+    const T1=SNIFF_WALK, T2=T1+SNIFF_HOLD;
+    const sn=at<T1? at/T1 : (at<T2? 1 : Math.max(0,1-(at-T2)/SNIFF_BACK));
+    const tw=Math.sin(at*42)*.022*sn;
+    sA=-.07*sn;
+    stHead=.20*sn+tw;
+  }
   sA += STATE.startle*.18;
   sA += .10*s;   // 坐时上身竖直微挺
   // 步态脊柱行波/扭转在 spineRot 内按各段相位独立计算（此处不再叠加同相项）
@@ -2365,8 +2393,8 @@ function loop(){
   // 伸懒腰时相机轻微后拉 + 略抬，避免前掌完全出画（结束后回原位）
   if(rig.camBase){
     const _st=Math.max(0,Math.min(1,STATE._stReach||0));
-    camera.position.z=rig.camBase.pz + .090*_st;
-    camera.position.y=rig.camBase.py + .016*_st;
+    camera.position.z=rig.camBase.pz + .150*_st;
+    camera.position.y=rig.camBase.py + .022*_st;
     camera.lookAt(rig.camBase.lx, rig.camBase.ly, rig.camBase.lz);
   }
   renderer.render(scene, camera);
