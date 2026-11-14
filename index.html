@@ -268,24 +268,20 @@
     <h4>看猫猫模式 · 人脸</h4>
     <ul>
       <li><b>正对镜头停留</b>：触发对视，猫咪软回看、慢眨眼（猫咪之吻）</li>
-      <li><b>微笑 / 开心</b>：猫咪开心，尾巴竖起</li>
-      <li><b>凑近 / 靠近</b>：猫咪迎上走到屏幕前</li>
-      <li><b>移开 / 离开</b>：猫咪警觉，瞳孔随之变化</li>
       <li><b>眨眼</b>：猫咪回你一个慢眨眼</li>
-      <li><b>转头（左/右）</b>：猫咪目光朝同侧轻瞥</li>
       <li><b>点头</b>：猫咪会跟着你一起点头（上下回应）</li>
       <li><b>摇头</b>：猫咪好奇地抖耳、轻瞟</li>
     </ul>
     <h4>看猫猫模式 · 手势</h4>
     <ul>
       <li><b>张开手掌抬起靠近</b>：猫咪举爪对掌，吸附你的手腕</li>
-      <li><b>手在画面内快速晃动</b>：猫咪开心地左右蹦两下再回原位</li>
       <li><b>手在画面内移动</b>：猫咪注意并跟随你的手</li>
       <li><b>抚摸镜头</b>（手在镜头前缓慢移动、遮住脸）：猫咪闭眼、放松享受</li>
     </ul>
     <h4>逗猫棒模式</h4>
     <ul>
       <li><b>移动逗猫棒</b>：棒尖移动，猫咪眼睛平滑跟随棒尖</li>
+      <li><b>快速来回挥动</b>：猫咪开心地蹦 6 下（原地两下 + 左 + 右）再回原位</li>
       <li><b>在某处快速点击</b>：猫咪朝该位置扑玩一下，再退回原位</li>
     </ul>
     <h4>通用</h4>
@@ -1123,7 +1119,7 @@ function loadCat(b64){
     float wy=smoothstep(0.05,0.10,transformed.y)*(1.0-smoothstep(0.17,0.23,transformed.y));
     float wz=smoothstep(0.02,0.10,transformed.z);   // 仅身体前侧
     float cw=wy*wz;
-    transformed.x *= 1.0-uStretch*cw*0.15;          // 峰值最多收窄 15%
+    transformed.x *= 1.0-uStretch*cw*0.06;          // 峰值只收窄 6%（原来 15% 会把胸口抽细，显得前腿很长）
     transformed.y += uStretch*cw*0.004;             // 轻微向上拉长，体现拉伸而非压缩
   }`;
         sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>',inject);
@@ -1296,8 +1292,7 @@ function updateEars(dt){
   // 前送俯仰（绕侧轴 X）：开心/警觉极轻微向前；过度刺激累积时耳朵略向后压（警告）
   const tPitch=THREE.MathUtils.clamp(.06*hp + .05*mb + STATE.fgResp.nod*.05 - .12*STATE.overstim, -.12, .14);
   // 偏航（绕竖轴 Y）：双耳同向轻转刺激；摇头时耳朵好奇地轻抖
-  const fx=STATE.face&&STATE.face.active ? (STATE.face.gx ?? STATE.face.x) : .5;
-  const tYaw=(fx-.5)*.28*(.3+mb) + STATE.fgResp.shakeSide*STATE.fgResp.shake*.2;
+  const tYaw=STATE.fgResp.shakeSide*STATE.fgResp.shake*.2;   // 转头互动已删除，只保留摇头时的抖耳
   // 偶发快速抽动：定时触发，前 .22s 内做一次小幅正弦 yaw flick
   e.twT+=dt;
   if(e.twT>e.twNext){ e.twT=0; e.twNext=2.5+Math.random()*5; e.twSide=Math.random()<.5?-1:1; }
@@ -1507,19 +1502,17 @@ function updateActions(t, dt){
       rp.blink=1; rp._blinkCount=0; rp._blinkEvery=2+((Math.random()*2)|0);
     }
   }
-  if(fgEv.turn!==rp._last.turn){ rp._last.turn=fgEv.turn; rp.turn=1; rp.turnSide=fgEv.turnSide; }
   if(fgEv.nod!==rp._last.nod){ rp._last.nod=fgEv.nod; rp.nod=1; rp.nodT=0; }   // 记录时间轴：猫跟着点一下
   if(fgEv.shake!==rp._last.shake){ rp._last.shake=fgEv.shake; rp.shake=1; rp.shakeSide=fgEv.turnSide||rp.shakeSide; }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
-  rp.turn=damp(rp.turn,0,3,dt);
   rp.nod=damp(rp.nod,0,2.6,dt);
   rp.shake=damp(rp.shake,0,3.2,dt);
   // 跟着点头：一次点头约 0.62s，先下后上（与用户点头同拍）
   rp.nodT=(rp.nodT===undefined?99:rp.nodT)+dt;
   const nodAnim = rp.nodT<0.62 ? -0.26*Math.sin(Math.PI*rp.nodT/0.62) : 0;
-  // 目光：转头→朝同侧轻瞥；摇头→好奇地向一侧轻瞟
-  STATE.target.x+=rp.turnSide*rp.turn*.12 + rp.shakeSide*rp.shake*.2;
+  // 目光：仅保留摇头的好奇轻瞟（转头互动已删除）
+  STATE.target.x+=rp.shakeSide*rp.shake*.2;
 
   // 眼球：两个标准眼球 pivot 同步转向视线目标，平滑、限角
   // 眨眼：随机间隔，快速闭合再睁开，避免长时间凝视
@@ -1608,12 +1601,10 @@ function updateActions(t, dt){
   // 人脸表情平滑（避免逐帧抖动）
   const fNow = STATE.face && STATE.face.active ? STATE.face : null;
   STATE.expr.mouth = damp(STATE.expr.mouth, fNow?fNow.mouth:0, 8, dt);
-  STATE.expr.smile = damp(STATE.expr.smile, fNow?fNow.smile:0, 10, dt);
-  STATE.expr.near  = damp(STATE.expr.near,  fNow?fNow.near:0,  6, dt);
   // 情绪反应量：开心（微笑/剪刀手）、惊讶（张嘴）
   const gNow = STATE.hand && STATE.hand.active ? STATE.hand.gesture : null;
   // 微笑增益提高（*20），轻微嘴角上扬即可开心；点头也算友好
-  STATE.happy = damp(STATE.happy, Math.min(1,Math.max(STATE.expr.smile*20,gNow==='peace'?1:0,STATE.fgResp.nod*.35)), 5, dt);
+  STATE.happy = damp(STATE.happy, Math.min(1,Math.max(gNow==='peace'?1:0,STATE.fgResp.nod*.35)), 5, dt);   // 微笑驱动已删除
   STATE.startle = damp(STATE.startle, STATE.expr.mouth>.10?1:0, 7, dt);
 
   // ===== 5) 动作选择：自主小动作 / 互动触发（pinch、点击、指向）=====
@@ -1747,13 +1738,18 @@ function updateActions(t, dt){
     STATE.actionT+=dt;
     const HOP_D=6.5, tt=STATE.actionT;
     const easeIO=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+    // 起跳/落地时间只用每段的 60%（比原来快约 50%），其余时间落地站稳，不再像气球
+    const FAST=.60;
     const arc=k=>Math.sin(Math.PI*Math.min(1,Math.max(0,k)))*.055;
     // [开始, 结束, 起点x, 终点x] —— 每段一次独立抛物线起跳
     const SEG=[[0,1.0,0,0],[1.0,2.0,0,0],[2.0,3.2,0,-.11],
                [3.2,4.4,-.11,0],[4.4,5.6,0,.11],[5.6,6.5,.11,0]];
     let x=0,y=0;
     for(const [a,b,x0,x1] of SEG){
-      if(tt>=a && tt<b){ const k=(tt-a)/(b-a); x=x0+(x1-x0)*easeIO(k); y=arc(k); break; }
+      if(tt>=a && tt<b){
+        const k=(tt-a)/(b-a), kf=Math.min(1,k/FAST);   // kf: 60% 时间内完成起跳到落地
+        x=x0+(x1-x0)*easeIO(kf); y=arc(kf); break;
+      }
     }
     STATE.moveX=x; STATE._hopY=y;
     if(tt>=HOP_D){ STATE.moveX=0; STATE._hopY=0; toIdle(); }
@@ -1828,7 +1824,7 @@ const D=.09*c + .032*s;
   const swayLat=.002*Math.sin(GAIT.phi*Math.PI*2)*gw;
   let stDip=0, stYaw=0, stPitch=0;
   if(act==='stretch'){
-    stDip=.018*stArch;
+    stDip=.012*stArch;
     // 随机向左/右小幅转约10°再伸懒腰；快速转到位，结束前慢慢转回（回正更缓）
     const sIn=clamp01(at/.7), sOut=1-clamp01((at-1.7)/.9);
     stYaw=(STATE.stretchSide||1)*(Math.PI/18)*Math.min(sIn,sOut);
@@ -2036,33 +2032,37 @@ const D=.09*c + .032*s;
   spineRot('Bone002', -.20, 0,    GAIT.bend*.35, sA*.55, 1, .12, .5,  .03);
   spineRot('Bone004', -.16, 0,    GAIT.headLead+headBend, sA*.15+stHead+nodAnim, 2, .24, .5, .014);
   // 抖毛/哆嗦：高频快速抖动，幅度小、时间短；头部最明显，身体递减
-  let shYaw=0,shRoll=0,shPitch=0,shRoot=0;
+  let shYaw=0,shRoll=0,shPitch=0,shRoot=0,shHeadYaw=0,shHeadRoll=0,shHeadPitch=0;
   if(act==='shake'){
     const dur=STATE.shakeDur||.8,amp=STATE.shakeAmp||1,env=Math.sin(Math.PI*Math.min(STATE.actionT/dur,1));
     const w=Math.sin(STATE.actionT*Math.PI*2*9.5);
-    shYaw=w*.09*amp*env;
-    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.11*amp*env;
-    shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.02*amp*env;
-    shRoot=w*.055*amp*env;
+    shYaw=w*.115*amp*env;                                  // 躯干左右抖（加强）
+    shRoll=Math.sin(STATE.actionT*Math.PI*2*9.5+1.2)*.135*amp*env;
+    shPitch=Math.sin(STATE.actionT*Math.PI*2*7)*.022*amp*env;
+    shRoot=w*.08*amp*env;
+    // 头部：更高频、更小幅度地快速来回旋转（不是摇头晃脑）
+    shHeadYaw=Math.sin(STATE.actionT*Math.PI*2*15.5+0.7)*.035*amp*env;
+    shHeadRoll=Math.sin(STATE.actionT*Math.PI*2*15.5+2.4)*.045*amp*env;
+    shHeadPitch=Math.sin(STATE.actionT*Math.PI*2*13)*.02*amp*env;
     rig.root.rotation.z+=shRoot;
     rig.root.rotation.x+=shPitch*.5;
   }
   // 摇头晃脑：世界空间的小幅摆动共轭进各脊柱骨本地系；头部全幅、上半身递减轻配合（不做大形变）
   {
     const hs=STATE.headSway;
-    const applySway=(name,fac)=>{
+    const applySway=(name,fac,hy=shYaw,hp=shPitch,hr=shRoll)=>{
       const bone=rig.bones[name]; if(!bone) return;
-      _SW_QY.setFromAxisAngle(_AX_Y,(hs.yaw+shYaw)*fac);
-      _SW_QP.setFromAxisAngle(_AX_X,(hs.pitch+shPitch)*fac);
-      _SW_QR.setFromAxisAngle(_AX_Z,(hs.roll+shRoll)*fac);
+      _SW_QY.setFromAxisAngle(_AX_Y,(hs.yaw+hy)*fac);
+      _SW_QP.setFromAxisAngle(_AX_X,(hs.pitch+hp)*fac);
+      _SW_QR.setFromAxisAngle(_AX_Z,(hs.roll+hr)*fac);
       _SW_W.copy(_SW_QY).multiply(_SW_QP).multiply(_SW_QR);
       const qb=rig.base[name];
       _SW_L.copy(qb).invert().multiply(_SW_W).multiply(qb);   // 世界摆动 → 该骨 rest 本地系
       bone.quaternion.multiply(_SW_L);
     };
-    applySway('Bone001',.85);   // 下脊柱（腰胯）一起抖
-    applySway('Bone002',1.05);  // 胸段主抖
-    applySway('Bone004',-.8);   // 头部反向、略滞后："头往左、身子往右"
+    applySway('Bone001',1.15);  // 下脊柱（腰胯）大幅抖
+    applySway('Bone002',1.45);  // 胸段主抖（加强）
+    applySway('Bone004',1,shHeadYaw,shHeadPitch,shHeadRoll);   // 头部：快速小幅自身旋转
     // 尾巴也被甩起来
     if(rig.bones.tail1) rig.bones.tail1.quaternion.multiply(
       new THREE.Quaternion().setFromEuler(new THREE.Euler(0,shYaw*1.6,shRoll*1.2)));
@@ -2088,9 +2088,9 @@ const D=.09*c + .032*s;
       // 水平侧向轴（与前向 F 正交）；按肩实际所在侧定符号，保证两掌都向外分
       const LAT=new THREE.Vector3(Math.cos(stYaw),0,-Math.sin(stYaw));
       const sideSign=Math.sign(S.dot(LAT))||1;
-      const latSep=stReach*.0124;   // 每掌额外外分约为前送量的 8%，两掌分开、减少与宽胸穿插
+      const latSep=stReach*.0155;   // 每掌额外外分（前送变短后略加外分，避免两掌靠太近）
       // 目标：从肩沿身体前向送出并向外分，掌落在地面并略微压下去（stReach 越大压得越低）
-      let W=S.clone().addScaledVector(F,stReach*.158).addScaledVector(LAT,sideSign*latSep);
+      let W=S.clone().addScaledVector(F,stReach*.128).addScaledVector(LAT,sideSign*latSep);
       W.y=groundY-.008*stReach;
       let rel=W.clone().sub(S);
       const lat=rel.clone().addScaledVector(F,-rel.dot(F)).addScaledVector(UP,-rel.dot(UP));  // 保留有意外分量，仅去掉意外侧摆
