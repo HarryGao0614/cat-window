@@ -3336,7 +3336,7 @@ boot();
   const FILES={knead:'knead.mp3',stretch:'stretch.mp3',dance:'dance.mp3',
                sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',
                heart:'heart.mp3',heartbeat:'heartbeat.mp3'};
-  const FILE_GAIN={knead:0.35,stretch:0.8,dance:1.0,sniff:0.5,step:0.224,pounce:1.0,heart:1.0,heartbeat:0.95};   // step -60%、stretch -20%、knead -50%
+  const FILE_GAIN={knead:0.35,stretch:0.8,dance:1.0,sniff:0.5,step:0.2,pounce:1.0,heart:1.0,heartbeat:0.95};   // step -60%、stretch -20%、knead -50%
   async function loadAll(){
     for(const k in FILES){
       const base=FILES[k].replace(/\.(mp3|m4a)$/,'');
@@ -3386,7 +3386,7 @@ boot();
       if(act==='pounce'&&ok('pounce',900)){ if(!play('pounce',t+0.05)) S.pounce(t+0.05); }
       last=act;
     }
-    if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.323; if(!play('step',now())) S.step(now()); } }   // 步频 +30%
+    if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.215; if(!play('step',now())) S.step(now()); } }   // 步频 +30%
     if(act==='knead'){ kneadT-=dt; if(kneadT<=0){ kneadT=0.46; if(!play('knead',now())) S.knead(now()); } }
     // sniff：等猫咪走到镜头前（actionT≥1.5s）再播放嗅闻声
     if(act==='sniff'){
