@@ -289,8 +289,9 @@
     <ul>
       <li><b>正对镜头停留</b>：猫咪回看，并慢慢眨眼（猫咪之吻）</li>
       <li><b>眨眼</b>：猫咪回你一次慢眨眼</li>
-      <li><b>点头</b>：猫咪跟着你一起点头</li>
+      <li><b>摆头</b>：猫咪跟着你一起摆头</li>
       <li><b>快速挥手</b>：猫咪开心地手舞足蹈</li>
+      <li><b>捏合</b>：拇指与食指捏合，猫咪以为有东西可扑，会扑玩一下</li>
       <li><b>摇头</b>：猫咪抖抖耳朵，往一侧轻瞟</li>
       <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
     </ul>
@@ -298,7 +299,7 @@
     <ul>
       <li><b>张开手掌举到画面里</b>：猫咪举爪对掌</li>
       <li><b>手在画面内移动</b>：猫咪的目光跟着你的手</li>
-      <li><b>手贴近镜头缓慢移动</b>：猫咪眯眼放松，像被抚摸</li>
+      <li><b>抚摸镜头</b>：手掌缓慢靠近镜头，猫咪眯眼放松，像被抚摸</li>
     </ul>
     <h4>逗猫棒模式</h4>
     <ul>
@@ -337,7 +338,7 @@
   <div class="row"><span class="k">人脸</span><span class="v"><span id="faceDot" class="dot"></span><span id="faceState">未检测</span></span></div>
   <div class="row faceGest"><span class="k">脸部动作</span>
     <span class="chips" id="faceChips">
-      <i data-g="smile">微笑</i><i data-g="nod">点头</i><i data-g="shake">摇头</i><i data-g="blink">眨眼</i><i data-g="turn">转头</i><i data-g="mouth">张嘴</i>
+      <i data-g="smile">微笑</i><i data-g="nod">摆头</i><i data-g="shake">摇头</i><i data-g="blink">眨眼</i><i data-g="turn">转头</i><i data-g="mouth">张嘴</i>
     </span>
   </div>
   <div class="row"><span class="k">手势</span><span class="v"><span id="handDot" class="dot"></span><span id="handState">未检测</span></span></div>
@@ -1777,7 +1778,7 @@ function updateActions(t, dt){
     // 瞳孔放大：警觉/蹲伏/惊讶/扑玩时放大，放松收细；保留基线 .12，无人时也不至于细成空洞
     const pupilRaw=Math.min(1,STATE.moodBlend*.7*(1-STATE.enjoy*.8)+STATE.crouchAmt*.5
       +STATE.startle*.9*(1-STATE.enjoy)+(STATE.action==='pounce'?.6:0)+STATE.happy*.25);
-    const pupilTarget=Math.max(.12,pupilRaw-STATE.enjoy*.08);
+    const pupilTarget=Math.max(.17,pupilRaw-STATE.enjoy*.08);   // 下限 .12→.17：人离开后缩小幅度减弱约 40%
     STATE.pupil=damp(STATE.pupil,pupilTarget,9,dt);
     // 眼球转角按世界（屏幕）轴施加：pivot 挂在倾斜的 Bone004 下，直接用本地 Euler 会沿脊柱斜轴
     // 转动、水平扫视变成圆锥摆动；这里把世界轴 yaw/pitch 共轭进头部本地坐标系，方向与屏幕一致
@@ -2515,29 +2516,8 @@ const CatAudio=(()=>{
       for(let i=0;i<irLen;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/irLen,2.8); }
     conv.buffer=ir;
     const wet=ac.createGain(); wet.gain.value=.5; conv.connect(wet); wet.connect(ambMaster);
-    // ---- 环境声：风声（低通噪声 + 缓慢起伏）----
-    const noiseLen=Math.floor(ac.sampleRate*4), nbuf=ac.createBuffer(1,noiseLen,ac.sampleRate);
-    { const d=nbuf.getChannelData(0); for(let i=0;i<noiseLen;i++) d[i]=Math.random()*2-1; }
-    const windSrc=ac.createBufferSource(); windSrc.buffer=nbuf; windSrc.loop=true;
-    const windLp=ac.createBiquadFilter(); windLp.type='lowpass'; windLp.frequency.value=420; windLp.Q.value=.3;
-    const windG=ac.createGain(); windG.gain.value=.055;
-    const windLfo=ac.createOscillator(); windLfo.type='sine'; windLfo.frequency.value=.09;
-    const windLfoG=ac.createGain(); windLfoG.gain.value=.032;
-    windLfo.connect(windLfoG); windLfoG.connect(windG.gain);
-    windSrc.connect(windLp); windLp.connect(windG); windG.connect(ambMaster); windG.connect(conv);
-    windSrc.start(); windLfo.start();
-    // ---- 环境声：夏夜蝉鸣（带通噪声 + 40Hz 颤音 + 约 11s 一次的强弱包络）----
-    const cicSrc=ac.createBufferSource(); cicSrc.buffer=nbuf; cicSrc.loop=true;
-    const cicLp=ac.createBiquadFilter(); cicLp.type='bandpass'; cicLp.frequency.value=4600; cicLp.Q.value=3.2;
-    const cicG=ac.createGain(); cicG.gain.value=.028;
-    const trem=ac.createOscillator(); trem.type='sine'; trem.frequency.value=38;
-    const tremG=ac.createGain(); tremG.gain.value=.016;
-    trem.connect(tremG); tremG.connect(cicG.gain);
-    const swell=ac.createOscillator(); swell.type='sine'; swell.frequency.value=.075;
-    const swellG=ac.createGain(); swellG.gain.value=.012;
-    swell.connect(swellG); swellG.connect(cicG.gain);
-    cicSrc.connect(cicLp); cicLp.connect(cicG); cicG.connect(ambMaster); cicG.connect(conv);
-    cicSrc.start(); trem.start(); swell.start();
+    // [已删除] 风声与蝉鸣：按需求移除，仅保留垫音和弦与混响
+
     // 垫音：低通滤波的三音和弦，9 秒换一次，慢速滑音
     const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1150; lp.Q.value=.4;
     const pad=ac.createGain(); pad.gain.value=.12; lp.connect(pad); pad.connect(ambMaster); pad.connect(conv);
@@ -2594,10 +2574,10 @@ const CatAudio=(()=>{
     if(!built||!unlocked) return;
     const p=Math.max(0,Math.min(1,purrLevel));
     const fade=Math.max(0,Math.min(1,fadeIn));
-    const purrTarget=(.25+.75*p)*.72*.95*.85*.7*fade;  // 呼噜再降 30%，随 walkIn 渐入
+    const purrTarget=(.25+.75*p)*.72*.95*.85*.50*fade;  // 呼噜再降 30%，随 walkIn 渐入
     purrEl.volume+=(purrTarget-purrEl.volume)*Math.min(1,dt*6);
     if(purrEl.paused) tryPlay(purrEl);
-    const mt=(musicEnabled?.26:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
+    const mt=(musicEnabled?.46:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
     if(ambBuilt && ambMaster){
       ambMaster.gain.setTargetAtTime(mt*1.105, ac.currentTime, .6);   // 整体音量 +30%
     } else if(musicEl){
