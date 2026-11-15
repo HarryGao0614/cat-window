@@ -2518,22 +2518,7 @@ const CatAudio=(()=>{
     const wet=ac.createGain(); wet.gain.value=.5; conv.connect(wet); wet.connect(ambMaster);
     // [已删除] 风声与蝉鸣：按需求移除，仅保留垫音和弦与混响
 
-    // 垫音：低通滤波的三音和弦，9 秒换一次，慢速滑音
-    const lp=ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1150; lp.Q.value=.4;
-    const pad=ac.createGain(); pad.gain.value=.12; lp.connect(pad); pad.connect(ambMaster); pad.connect(conv);
-    const CH=[[196,246.94,293.66],[174.61,220,261.63],[220,261.63,329.63],[164.81,196,246.94]];
-    const voices=[];
-    for(let i=0;i<3;i++){
-      const o=ac.createOscillator(); o.type=i===0?'sine':'triangle';
-      o.frequency.value=CH[0][i]; o.detune.value=(i-1)*5;
-      const g=ac.createGain(); g.gain.value=.34; o.connect(g); g.connect(lp); o.start();
-      voices.push(o);
-    }
-    let ci=0;
-    setInterval(()=>{ if(!ac||ac.state!=='running') return;
-      ci=(ci+1)%CH.length; const now=ac.currentTime;
-      voices.forEach((o,i)=>{ o.frequency.setTargetAtTime(CH[ci][i],now,1.8); });
-    },9000);
+    // [已删除] 垫音和弦（低通三音长音）：会产生持续嗡嗡声，按需求移除
     // 偶发铃声（五声音阶，随机左右声像）
     const notes=[523.25,587.33,659.25,783.99,880];
     const bell=()=>{
@@ -2579,7 +2564,7 @@ const CatAudio=(()=>{
     if(purrEl.paused) tryPlay(purrEl);
     const mt=(musicEnabled?.46:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
     if(ambBuilt && ambMaster){
-      ambMaster.gain.setTargetAtTime(mt*1.105, ac.currentTime, .6);   // 整体音量 +30%
+      ambMaster.gain.setTargetAtTime(mt, ac.currentTime, .6);   // 环境混音（垫音已删，不再额外增益）
     } else if(musicEl){
       musicEl.volume+=(mt-musicEl.volume)*Math.min(1,dt*4);
       if(musicEnabled&&musicEl.paused) tryPlay(musicEl);
