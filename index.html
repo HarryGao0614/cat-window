@@ -3300,7 +3300,7 @@ boot();
 // ===== 卡通音效（WebAudio 实时合成，零文件、零版权） =====
 (function(){
   let ac=null, master=null, noiseBuf=null, ready=false;
-  const VOL=0.45;                        // 总音量（原 1.5 的 30%）
+  const VOL=0.225;                       // 总音量（在 30% 基础上再降 50%）
   function boot(){
     if(ac) return;
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
@@ -3383,12 +3383,19 @@ boot();
       if(act==='stretch'&&ok('stretch',1200)){ if(!play('stretch',t+0.05)) S.stretch(t+0.05); }
       if(act==='knead'&&ok('knead',900)){ kneadT=0; }
       if(act==='dance'&&ok('dance',1200)){ if(!play('dance',t)) S.dance(t); }
-      if(act==='sniff'&&ok('sniff',1200)){ if(!play('sniff',t+0.08)) S.sniff(t+0.08); }
+      // sniff 音效改为走到位后再播（见下方 actionT≥1.5s 的延迟触发）
       if(act==='pounce'&&ok('pounce',900)){ if(!play('pounce',t+0.05)) S.pounce(t+0.05); }
       last=act;
     }
     if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.42; if(!play('step',now())) S.step(now()); } }
     if(act==='knead'){ kneadT-=dt; if(kneadT<=0){ kneadT=0.46; if(!play('knead',now())) S.knead(now()); } }
+    // sniff：等猫咪走到镜头前（actionT≥1.5s）再播放嗅闻声
+    if(act==='sniff'){
+      if(STATE.actionT>=1.5 && !STATE._sniffPlayed){
+        STATE._sniffPlayed=true;
+        if(!play('sniff',now()+0.05)) S.sniff(now()+0.05);
+      }
+    } else STATE._sniffPlayed=false;
   };
   // 互动事件驱动
   window.__sfxNote=function(name){
