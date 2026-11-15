@@ -2432,8 +2432,8 @@ const D=.09*c + SITT.D*s;
       if(STATE._hPrev && nowW-STATE._hPrev.t<.35){
         const sp=Math.hypot(hd.x-STATE._hPrev.x, hd.y-STATE._hPrev.y)/dtW;
         const dir=Math.sign(hd.x-STATE._hPrev.x);
-        if(sp>1.2 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*6.5;   // 方向反转才算"挥"
-        else if(sp>2.3) STATE._waveE=(STATE._waveE||0)+dtW*1.8;
+        if(sp>0.85 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*9.5;   // 方向反转才算"挥"（手势更灵敏）
+        else if(sp>1.6) STATE._waveE=(STATE._waveE||0)+dtW*3.0;
         if(dir!==0) STATE._hDir=dir;
       }
       STATE._hPrev={x:hd.x,y:hd.y,t:nowW};
