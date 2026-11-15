@@ -292,7 +292,6 @@
       <li><b>正对镜头停留</b>：猫咪回看，并慢慢眨眼（猫咪之吻）</li>
       <li><b>眨眼</b>：猫咪回你一次慢眨眼</li>
       <li><b>摆头</b>：猫咪跟着你一起摆头</li>
-      <li><b>快速挥手</b>：猫咪开心地手舞足蹈</li>
       <li><b>捏合</b>：拇指与食指捏合，猫咪以为有东西可扑，会扑玩一下</li>
       <li><b>摇头</b>：猫咪抖抖耳朵，往一侧轻瞟</li>
       <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
@@ -2432,8 +2431,8 @@ const D=.09*c + SITT.D*s;
       if(STATE._hPrev && nowW-STATE._hPrev.t<.35){
         const sp=Math.hypot(hd.x-STATE._hPrev.x, hd.y-STATE._hPrev.y)/dtW;
         const dir=Math.sign(hd.x-STATE._hPrev.x);
-        if(sp>0.85 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*9.5;   // 方向反转才算"挥"（手势更灵敏）
-        else if(sp>1.6) STATE._waveE=(STATE._waveE||0)+dtW*3.0;
+        if(sp>0.30 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*16.0;   // 反向挥：蓄能大幅加快
+        else if(sp>0.45) STATE._waveE=(STATE._waveE||0)+dtW*6.0;                    // 单向挥也算，不必来回
         if(dir!==0) STATE._hDir=dir;
       }
       STATE._hPrev={x:hd.x,y:hd.y,t:nowW};
@@ -2450,11 +2449,11 @@ const D=.09*c + SITT.D*s;
       STATE._wPrev={x:STATE.pointer.x,y:STATE.pointer.y,t:nowW};
     } else { STATE._wPrev=null; STATE._wDir=undefined; }
     // 能量衰减 + 触发
-    STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.42);
-    if(STATE._waveE>=.58 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
-       && (STATE.action==='idle'||STATE.action==='sit')){
+    STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.28);
+    if(STATE._waveE>=.32 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
+       && (STATE.action==='idle'||STATE.action==='sit'||STATE.action==='notice')){
       STATE._waveE=0; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
-      STATE.danceCool=5.0; noteAct('手舞足蹈');
+      STATE.danceCool=3.0; noteAct('手舞足蹈');
     }
   }
 
