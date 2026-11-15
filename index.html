@@ -3266,5 +3266,77 @@ guideHead.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.p
 syncModeUI();
 loop();   // 所有 const/状态声明完成后再启动渲染循环，避免 TDZ
 </script>
+<script type="module">
+import * as THREE from 'https://fastly.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+// 试验：胡须 + 肉垫（运行时挂载，参数已锁定）
+const W={dx:0,dy:0.5,dz:2.5,ang:12,len:4.3,n:6,rad:0.08,bend:1,roots:3};
+const FP={toesY:0.2,toesZ:-0.4,toesSpread:1,toesR:0.8,mainY:0.2,mainZ:0.2,mainR:0.8,toeDome:0.2,mainDome:0.4,
+          t1:-0.1,t2:0.3,t3:0.4,t4:0,x1:0,x2:-0.1,x3:-0.1,x4:-0.1};
+const HP={toesZ:-1.5,toesY:1.8,spread:1,size:0.75,mainZ:-1.5,mainY:-0.1,mainR:1,toeDome:0.2,mainDome:0.2,
+          t1:-0.1,t2:-0.6,t3:-0.7,t4:-0.3,x1:-0.1,x2:-0.1,x3:0.1,x4:0.2};
+const hash=(k)=>{const v=Math.sin((k+1)*127.1+37.7)*43758.5453;return v-Math.floor(v);};
+function boot(){
+  const rig=window.rig;
+  if(!window.__CAT_READY||!rig||!rig.bones||!rig.bones.Bone004) return setTimeout(boot,200);
+  import('https://fastly.jsdelivr.net/npm/three@0.169.0/examples/jsm/utils/BufferGeometryUtils.js').then(BGU=>{
+    const toLocal=(bone,w)=>{bone.updateWorldMatrix(true,false);
+      return w.clone().applyMatrix4(new THREE.Matrix4().copy(bone.matrixWorld).invert());};
+    // 胡须
+    const hb=rig.bones.Bone004; hb.updateWorldMatrix(true,false);
+    const H=hb.getWorldPosition(new THREE.Vector3());
+    const MAT=new THREE.MeshStandardMaterial({color:0xf6f7f4,emissive:0x9aa39a,emissiveIntensity:.6,roughness:.32,metalness:0});
+    const geos=[];
+    const clampv=(v,a,b)=>Math.max(a,Math.min(b,v));
+    const dx=clampv(W.dx/100,-.08,.06),dy=clampv(W.dy/100,-.08,.06),dz=clampv(W.dz/100,-.08,.06);
+    for(const sd of [-1,1]) for(let ri=0;ri<Math.round(W.roots);ri++){
+      const tr=(ri-(W.roots-1)/2)/Math.max(0.5,(W.roots-1)/2||1);
+      for(let k=0;k<2;k++){
+        const t=tr+(k===0?0.32:-0.10), rr=hash(ri*7+k*3+(sd>0?11:29));
+        const rootW=H.clone().add(new THREE.Vector3(dx+sd*(0.0120+0.0010*rr),
+          dy-0.0022-0.0016*Math.abs(t)-0.0008*rr, dz+0.0430+0.0012*(1-Math.abs(t))+0.0022*k));
+        const len=(W.len/100)*(0.92+0.12*(1-Math.abs(t)))*(0.95+0.10*rr);
+        const tipW=rootW.clone().add(new THREE.Vector3(sd*len*0.985, Math.sin(W.ang*Math.PI/180*t)*len*0.95,-0.004));
+        const a=toLocal(hb,rootW), b=toLocal(hb,tipW);
+        const d=b.clone().sub(a), L=d.length(), rad=Math.max(1e-4,W.rad/1000);
+        const mid=a.clone().lerp(b,0.5); mid.y+=Math.min(0.004,Math.abs(b.x-a.x)*W.bend*0.10);
+        const curve=new THREE.QuadraticBezierCurve3(a,mid,b);
+        const pts=curve.getPoints(4);
+        for(let q=0;q<4;q++){
+          const p1=pts[q],p2=pts[q+1],dd=p2.clone().sub(p1),LL=dd.length();
+          const r1=rad*(1-q/4*0.8),r2=rad*(1-(q+1)/4*0.8);
+          const cg=new THREE.CylinderGeometry(r2,r1,LL,4,1,true);
+          cg.translate(0,LL/2,0);
+          cg.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dd.normalize()));
+          cg.translate(p1.x,p1.y,p1.z); geos.push(cg);
+        }
+      }
+    }
+    const wm=new THREE.Mesh(BGU.mergeGeometries(geos,false),MAT); wm.frustumCulled=false; hb.add(wm);
+    // 肉垫
+    const PM=new THREE.MeshStandardMaterial({color:0xd9a396,roughness:.5,metalness:0});
+    const unit=()=>new THREE.SphereGeometry(1,12,9);
+    const add=(bone,spec)=>{ if(!bone) return;
+      const gs=spec.map(p=>{const g=unit();g.scale(p.r*p.sx,p.r*p.sy,p.r*p.sz);g.translate(p.c[0],p.c[1],p.c[2]);return g;});
+      const m=new THREE.Mesh(BGU.mergeGeometries(gs,false),PM); m.frustumCulled=false; bone.add(m);
+    };
+    const zF=0.0112, yToe=0.0262+(FP.toesY/100), yMain=0.0140+(FP.mainY/100);
+    const dome=Math.max(.10,.42*(1-FP.toeDome)+.06), md=Math.max(.10,.42*(1-FP.mainDome)+.06);
+    const tA=[FP.t1,FP.t2,FP.t3,FP.t4].map(v=>v/100), xA=[FP.x1,FP.x2,FP.x3,FP.x4].map(v=>v/100);
+    const base=[-0.0120,-0.0055,0.0008,0.0070].map(v=>v*FP.toesSpread);
+    const mk=(mir)=>[{c:[-0.0030*mir,yMain,zF+(FP.mainZ/100)],r:0.0058*FP.mainR,sx:1.15,sy:md,sz:.42},
+      ...base.map((x,i)=>({c:[mir*(x+xA[i]), yToe+tA[i], zF+(FP.toesZ/100)], r:0.0037*FP.toesR, sx:1,sy:dome,sz:.42}))];
+    add(rig.bones.paw3_R,mk(1)); add(rig.bones.paw3_L,mk(-1));
+    const yH=0.0470+(HP.toesY/100), zToe=-0.0086+(HP.toesZ/100), zMain=-0.0012+(HP.mainZ/100);
+    const hd=Math.max(.10,.42*(1-HP.toeDome)+.06), hmd=Math.max(.10,.42*(1-HP.mainDome)+.06);
+    const hT=[HP.t1,HP.t2,HP.t3,HP.t4].map(v=>v/100), hX=[HP.x1,HP.x2,HP.x3,HP.x4].map(v=>v/100);
+    const hb2=[-0.0068,-0.0024,0.0020,0.0064].map(v=>v*HP.spread);
+    const mkh=(mir)=>[{c:[-0.0002,yH+(HP.mainY/100),zMain],r:0.0052*HP.mainR,sx:1.10,sy:hmd,sz:1},
+      ...hb2.map((x,i)=>({c:[mir*(x+hX[i]),yH,zToe+hT[i]],r:0.0034*HP.size,sx:1,sy:hd,sz:1}))];
+    add(rig.bones.leg3_R,mkh(1)); add(rig.bones.leg3_L,mkh(-1));
+    console.log('extras attached');
+  });
+}
+boot();
+</script>
 </body>
 </html>
