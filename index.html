@@ -299,7 +299,6 @@
     <h4>看猫猫模式 · 手势</h4>
     <ul>
       <li><b>张开手掌举到画面里</b>：猫咪举爪对掌</li>
-      <li><b>手在画面内移动</b>：猫咪的目光跟着你的手</li>
       <li><b>抚摸镜头</b>：手掌缓慢靠近镜头，猫咪眯眼放松，像被抚摸</li>
     </ul>
     <h4>逗猫棒模式</h4>
@@ -456,7 +455,7 @@ window.STATE = STATE;
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
 const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=3.10, SNIFF_HOLD=3.0, SNIFF_BACK=2.5;    // 走近更慢；嗅闻 +1s（节奏不变）   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
-const SESS_MAX=20;
+const SESS_MAX=25;
 const DANCE_DUR=4.8;   // 手舞足蹈时长（连续三次点头触发）                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
 const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
@@ -1568,9 +1567,9 @@ function updateActions(t, dt){
   } else if(STATE.top==='engaged' && STATE.action!=='pounce'){
     STATE.sessT+=dt;
     if(STATE.sessT>=SESS_MAX || STATE.overstim>=1){
-      STATE.top='free'; STATE.coolT=2+Math.random()*2; STATE.gazeT=-1;   // 原地冷却 2~4s 随机
+      STATE.top='free'; STATE.coolT=5.0; STATE.gazeT=-1;                // 强制休息 5 秒
       STATE.moveX=0; STATE.action='idle'; STATE.actionT=0;
-      STATE.actionCool=1.5+Math.random()*1.5;
+      STATE.actionCool=0.25;   // 立刻进入自主状态，休息中就开始自主动作
       resetStanceAnchors();
     }
   }
@@ -1872,12 +1871,12 @@ function updateActions(t, dt){
         if(unseen.length>0){ fire(unseen[(Math.random()*unseen.length)|0]); }   // 优先补齐没展示过的
         else {
           const r=Math.random();
-          if(r<.28){STATE.actionCool=1.6+Math.random()*1.8;}                                            // 站着 28%
-          else if(r<.52){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}     // 坐着 24%
-          else if(r<.64){fire('knead');}                                                                // 踩奶 12%
-          else if(r<.76){fire('shake');}                                                                // 抖毛 12%
-          else if(r<.88){fire('stretch');}                                                              // 伸懒腰 12%
-          else {fire('pounce');}                                                                        // 扑玩 12%
+          if(r<.20){STATE.actionCool=1.6+Math.random()*1.8;}                                            // 站着发呆 20%
+          else if(r<.40){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}     // 坐着 20%
+          else if(r<.58){fire('knead');}                                                                // 踩奶 18%
+          else if(r<.76){fire('shake');}                                                                // 抖毛 18%
+          else if(r<.92){fire('stretch');}                                                              // 伸懒腰 16%
+          else {fire('pounce');}                                                                        // 扑玩 8%
         }
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
