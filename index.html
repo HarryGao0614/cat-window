@@ -95,6 +95,116 @@
   #pip video{width:100%;height:100%;object-fit:cover}
 
   /* 开始遮罩 */
+  /* ===== 首页装饰：金色线绘 + 漂浮 ===== */
+  #gate{overflow:hidden}
+  #gateArt{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+  #gateArt svg{position:absolute;inset:0;width:100%;height:100%}
+  #gateArt .g{fill:none;stroke:url(#goldGrad);stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
+  #gateArt .g2{fill:none;stroke:url(#goldGrad);stroke-width:.9;stroke-linecap:round;stroke-linejoin:round;opacity:.62}
+  #gateArt .gw{stroke-width:.7;opacity:.45}
+  #gateArt .dot{fill:#f6e2b8}
+  @keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-16px)}}
+  @keyframes floatY2{0%,100%{transform:translateY(0)}50%{transform:translateY(-26px)}}
+  @keyframes floatYs{0%,100%{transform:translateY(0) translateX(0)}50%{transform:translateY(-11px) translateX(5px)}}
+  @keyframes twk{0%,100%{opacity:.22}50%{opacity:.95}}
+  #gateArt .fl1{animation:floatY 8s ease-in-out infinite}
+  #gateArt .fl2{animation:floatY2 12s ease-in-out infinite}
+  #gateArt .fl3{animation:floatYs 10s ease-in-out infinite}
+  #gateArt .tw1{animation:twk 4.2s ease-in-out infinite}
+  #gateArt .tw2{animation:twk 6.8s ease-in-out infinite}
+  #gateArt .tw3{animation:twk 8.5s ease-in-out infinite}
+  #gate > h2, #gate > p, #gate > button, #gate > .hint, #gate > div:not(#gateArt), #gate > .divider{position:relative;z-index:2}
+  /* ===== 杂志式排版升级（后置覆盖） ===== */
+  #gate{background:rgba(11,9,8,.78);backdrop-filter:blur(6px) saturate(.9)}
+  #gate::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(60% 46% at 50% 34%,rgba(233,200,133,.16),transparent 70%),
+      radial-gradient(42% 34% at 18% 82%,rgba(199,155,82,.10),transparent 72%),
+      radial-gradient(38% 30% at 84% 20%,rgba(255,243,214,.07),transparent 70%),
+      linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,.15) 40%,rgba(0,0,0,.42));
+  }
+  #gate::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.05;
+    background-image:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);
+    mix-blend-mode:overlay}
+  #gate > h2, #gate > p, #gate > button, #gate > .hint, #gate > div:not(#gateArt), #gate > .divider, #gate > .kicker, #gate > .issue{position:relative;z-index:3;max-width:min(660px,92vw)}
+  #gate > .kicker, #gate > .divider, #gate > .issue{max-width:none}
+  #gate .kicker{
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:10.5px;letter-spacing:.52em;
+    color:#cbb489;text-transform:uppercase;margin:0 0 16px;opacity:.9;
+    animation:magIn .9s cubic-bezier(.2,.7,.2,1) both}
+  #gate h2{
+    font-family:"Songti SC","STSong","Noto Serif SC",Georgia,serif;
+    font-size:clamp(34px,5vw,58px);font-weight:600;letter-spacing:.3em;line-height:1.06;
+    margin:0 0 2px;padding-left:.3em;
+    background:linear-gradient(100deg,#fff8ea 0%,#f6dfae 30%,#d9ae62 58%,#fff1cf 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 3px 18px rgba(216,174,98,.42));
+    animation:magIn 1.1s cubic-bezier(.2,.7,.2,1) both .1s}
+  #gate .divider{width:240px;margin:14px 0 18px;animation:magIn 1s both .25s}
+  #gate .divider i{width:88px;height:1px}
+  #gate .divider span{font-size:10px;letter-spacing:.5em;color:#dcbf8c}
+  #gate p{
+    font-family:"Songti SC","STSong",Georgia,serif;
+    font-size:clamp(13.5px,1.15vw,16px);line-height:2.15;letter-spacing:.06em;
+    color:#eadfcc;max-width:560px;margin-bottom:26px;
+    animation:magIn 1.1s cubic-bezier(.2,.7,.2,1) both .35s}
+  #gate .hint{font-family:"Helvetica Neue",Arial,sans-serif;font-size:11.5px;letter-spacing:.14em;color:#a99mad}
+  #gate .hint{color:#a99a80}
+  #startBtn{
+    font-family:"Songti SC","STSong",Georgia,serif;font-size:14px;letter-spacing:.42em;padding-left:.42em;
+    color:#241a10;border-radius:2px;padding-top:15px;padding-bottom:15px;
+    background:linear-gradient(135deg,#f7e3b5 0%,#e3c184 45%,#c99b52 100%);
+    box-shadow:0 10px 34px rgba(201,155,82,.34),inset 0 1px 0 rgba(255,255,255,.6);
+    transition:transform .22s cubic-bezier(.2,.7,.2,1),box-shadow .25s,filter .25s;
+    animation:magIn 1s cubic-bezier(.2,.7,.2,1) both .5s}
+  #startBtn:hover{transform:translateY(-2px);filter:brightness(1.06);
+    box-shadow:0 16px 46px rgba(201,155,82,.5),inset 0 1px 0 rgba(255,255,255,.75)}
+  #mouseBtn.ghost{
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:11.5px;letter-spacing:.34em;padding-left:.34em;
+    color:#d3c3a5;border:1px solid rgba(217,174,98,.42);border-radius:2px;
+    padding-top:12px;padding-bottom:12px;margin-top:14px;
+    animation:magIn 1s cubic-bezier(.2,.7,.2,1) both .62s}
+  #mouseBtn.ghost:hover{border-color:#e9c885;color:#f4e3bd;background:rgba(233,200,133,.07)}
+  #gate .issue{
+    position:absolute!important;left:0!important;right:0!important;bottom:22px!important;z-index:3;text-align:center;
+    margin:0!important;padding:0!important;
+    font-family:"Didot","Bodoni 72","Playfair Display",Georgia,serif;
+    font-size:10px;letter-spacing:.5em;color:#8e8168;white-space:nowrap;
+    animation:magIn 1.2s both .8s}
+  #gate .spine{
+    position:absolute;left:26px;top:50%;transform:translateY(-50%) rotate(180deg);writing-mode:vertical-rl;
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:9.5px;letter-spacing:.62em;color:#6f6553;
+    z-index:3;pointer-events:none;animation:magIn 1.4s both 1s}
+  #gate .spine-r{left:auto;right:26px;transform:translateY(-50%);}
+  @keyframes magIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  /* 线条生长 */
+  #gateArt .draw{stroke-dasharray:900;stroke-dashoffset:900;animation:drawIn 2.6s cubic-bezier(.35,.05,.2,1) forwards}
+  #gateArt .draw2{stroke-dasharray:900;stroke-dashoffset:900;animation:drawIn 3.2s cubic-bezier(.35,.05,.2,1) .35s forwards}
+  #gateArt .draw3{stroke-dasharray:900;stroke-dashoffset:900;animation:drawIn 3.8s cubic-bezier(.35,.05,.2,1) .7s forwards}
+  @keyframes drawIn{to{stroke-dashoffset:0}}
+  /* 金色聚光呼吸 */
+  @keyframes glowBreath{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+  #gate::before{animation:glowBreath 9s ease-in-out infinite}
+  @media (max-width:900px), (max-height:680px){ #gateArt .fl1,#gateArt .fl2,#gateArt .fl3{animation:none} }
+  #startBtn,#mouseBtn{opacity:0}
+  @media (max-width:900px){ #gate .spine{display:none} #gate h2{letter-spacing:.2em} }
+  /* ===== 首页排版：贵气精致 ===== */
+  #gate h2{
+    font-size:clamp(30px,4.4vw,46px);letter-spacing:.22em;margin:0 0 4px;
+    background:linear-gradient(100deg,#fff6e2 0%,#f3d79a 38%,#d9ae62 62%,#f7e6c2 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 2px 12px rgba(216,174,98,.35));
+  }
+  #gate .divider{
+    width:190px;height:18px;margin:10px 0 16px;display:flex;align-items:center;justify-content:center;gap:8px;
+    opacity:.85;
+  }
+  #gate .divider i{display:block;height:1px;width:64px;background:linear-gradient(90deg,transparent,#d9ae62,transparent)}
+  #gate .divider span{color:#e9cf9a;font-size:11px;letter-spacing:.4em}
+  #gate p{max-width:600px;line-height:1.95;color:#e6dccb;letter-spacing:.02em}
+  #gate .hint{color:#c9b99c;letter-spacing:.03em}
+  #gate h2 + .hint{margin-top:2px}
+  @media (max-width:720px){ #gateArt svg{opacity:.6} #gateArt .fl1,#gateArt .fl2,#gateArt .fl3{animation-duration:14s} }
   #gate{
     position:fixed;inset:0;z-index:20;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -349,7 +459,107 @@
 <div id="pip"><video id="pipVideo" autoplay muted playsinline></video></div>
 
 <div id="gate">
+  <div id="gateArt" aria-hidden="true">
+    <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#fff6e0"/><stop offset=".38" stop-color="#f0d29b"/>
+          <stop offset=".68" stop-color="#c99c53"/><stop offset="1" stop-color="#f7e8c6"/>
+        </linearGradient>
+        <radialGradient id="moonGlow"><stop offset="0" stop-color="#f3d79a" stop-opacity=".32"/><stop offset="1" stop-color="#f3d79a" stop-opacity="0"/></radialGradient>
+      </defs>
+
+      <!-- ===== 右上：弯月（细弧光晕 + 疏星） ===== -->
+      <g transform="translate(1176,206)">
+        <circle r="86" fill="url(#moonGlow)" opacity=".55"/>
+        <g class="g f1 fl1"><g class="draw2">
+          <path d="M0 -46 A46 46 0 1 0 46 6 A36 36 0 1 1 0 -46Z"/>
+          <g class="g2"><path d="M-70 -30 A78 78 0 0 1 18 -80" class="gw"/></g>
+        </g></g>
+      </g>
+
+      <!-- ===== 右侧：垂枝（细叶） ===== -->
+      <g transform="translate(1330,120)"><g class="g f3 fl1">
+        <path d="M0 0 C-22 38 -24 84 -6 122 C8 152 2 186 -22 208"/>
+        <g class="g2">
+          <path d="M-12 30 C-26 24 -34 32 -30 44 C-18 46 -12 40 -12 30Z"/><path d="M-12 30 L-20 36" class="gw"/>
+          <path d="M-20 66 C-34 62 -42 70 -38 82 C-26 84 -20 76 -20 66Z"/><path d="M-20 66 L-28 72" class="gw"/>
+          <path d="M-20 104 C-34 102 -40 112 -34 122 C-22 122 -18 114 -20 104Z"/><path d="M-20 104 L-28 110" class="gw"/>
+          <path d="M-10 142 C-24 140 -30 150 -24 160 C-12 160 -8 152 -10 142Z"/><path d="M-10 142 L-18 148" class="gw"/>
+        </g>
+      </g></g>
+
+      <!-- ===== 左下：坐猫（精细轮廓：耳/脸/胸毛/前肢/后髋/卷尾） ===== -->
+      <g transform="translate(196,748)">
+        <g class="g f2 fl2"><g class="draw3">
+          <!-- 后髋与臀 -->
+          <path d="M18 -58 C42 -52 58 -30 52 -6 C48 6 36 12 24 12"/>
+          <!-- 背部到颈 -->
+          <path d="M22 -60 C10 -76 2 -92 -2 -108"/>
+          <!-- 头 -->
+          <path d="M-24 -108 C-36 -110 -42 -122 -36 -134 C-30 -146 -14 -152 0 -150 C14 -148 26 -138 26 -124 C26 -110 14 -104 2 -106"/>
+          <!-- 双耳 -->
+          <path d="M-30 -140 L-40 -162 L-16 -152"/>
+          <path d="M18 -148 L30 -166 L32 -142"/>
+          <!-- 眼与鼻、嘴 -->
+          <g class="g2">
+            <path d="M-16 -128 C-11 -133 -4 -131 -2 -125"/><path d="M12 -126 C16 -132 23 -133 26 -127"/>
+            <path d="M-2 -116 L-8 -111 L4 -111 Z" style="fill:url(#goldGrad);stroke:none;opacity:.9"/>
+            <path d="M-2 -111 C-6 -106 -12 -106 -15 -109 M-2 -111 C2 -106 8 -106 11 -109"/>
+            <path d="M-20 -120 L-52 -126 M-20 -116 L-54 -112 M-20 -112 L-50 -104 M14 -118 L46 -126 M14 -114 L48 -112 M14 -110 L44 -102" class="gw"/>
+          </g>
+          <!-- 胸口毛发 -->
+          <path d="M-8 -100 C-2 -96 6 -96 12 -100" class="gw"/>
+          <path d="M-14 -86 C-8 -82 0 -82 6 -86 M-16 -72 C-9 -67 1 -67 8 -72" class="gw"/>
+          <!-- 前肢与爪 -->
+          <path d="M-14 -92 C-22 -70 -26 -44 -24 -20 C-23 -8 -20 0 -16 6"/>
+          <path d="M10 -96 C4 -72 2 -46 4 -22 C5 -10 8 -2 12 4"/>
+          <path d="M-24 6 C-30 12 -22 16 -12 16 M12 4 C18 10 10 14 0 14" class="gw"/>
+          <!-- 腹部与后爪 -->
+          <path d="M24 12 C8 18 -8 18 -20 12"/>
+          <path d="M18 -58 C30 -46 34 -24 28 -6" class="gw"/>
+          <!-- 卷尾 -->
+          <path d="M50 -4 C70 2 82 -16 72 -32 C64 -44 50 -40 52 -27 C53 -17 62 -13 68 -19"/>
+        </g></g>
+      </g>
+
+      <!-- ===== 四角装饰框（开口朝内） ===== -->
+      <g transform="translate(58,58)"><g class="g2 f1">
+        <path d="M0 30 L0 0 L30 0"/>
+        <path d="M8 18 L8 26 M18 8 L26 8" class="gw"/>
+        <circle cx="36" cy="36" r="1.6" class="dot"/>
+      </g></g>
+      <g transform="translate(1382,58)"><g class="g2 f1">
+        <path d="M0 30 L0 0 L-30 0"/>
+        <path d="M-8 18 L-8 26 M-18 8 L-26 8" class="gw"/>
+        <circle cx="-36" cy="36" r="1.6" class="dot"/>
+      </g></g>
+      <g transform="translate(58,842)"><g class="g2 f1">
+        <path d="M0 -30 L0 0 L30 0"/>
+        <path d="M8 -18 L8 -26 M18 -8 L26 -8" class="gw"/>
+        <circle cx="36" cy="-36" r="1.6" class="dot"/>
+      </g></g>
+      <g transform="translate(1382,842)"><g class="g2 f1">
+        <path d="M0 -30 L0 0 L-30 0"/>
+        <path d="M-8 -18 L-8 -26 M-18 -8 L-26 -8" class="gw"/>
+        <circle cx="-36" cy="-36" r="1.6" class="dot"/>
+      </g></g>
+
+      <!-- ===== 星与浮尘（仅角落区域） ===== -->
+      <g class="tw1" transform="translate(300,268)"><path class="g" d="M0 -7 L1.6 -1.6 L7 0 L1.6 1.6 L0 7 L-1.6 1.6 L-7 0 L-1.6 -1.6Z"/></g>
+      <g class="tw2" transform="translate(1058,318)"><path class="g" d="M0 -5.5 L1.3 -1.3 L5.5 0 L1.3 1.3 L0 5.5 L-1.3 1.3 L-5.5 0 L-1.3 -1.3Z"/></g>
+      <g class="tw3" transform="translate(128,470)"><path class="g" d="M0 -4.5 L1 -1 L4.5 0 L1 1 L0 4.5 L-1 1 L-4.5 0 L-1 -1Z"/></g>
+      <g class="tw1" transform="translate(1052,690)"><circle r="1.9" class="dot"/></g>
+      <g class="tw2" transform="translate(150,330)"><circle r="1.5" class="dot"/></g>
+      <g class="tw3" transform="translate(1310,500)"><circle r="1.6" class="dot"/></g>
+      <g class="tw1" transform="translate(420,150)"><circle r="1.4" class="dot"/></g>
+      <g class="tw2" transform="translate(1000,120)"><circle r="1.3" class="dot"/></g>
+    </svg>
+  </div>
+
+  <div class="kicker">Web Cat · 观景窗</div>
   <h2>网页猫猫</h2>
+  <div class="divider"><i></i><span>MEOW</span><i></i></div>
 
   <div class="hint" style="margin:-2px 0 10px;color:#ffd79a">
     💡 建议使用 Chrome / Edge / Safari 等现代浏览器；国内网络建议科学上网，加载与交互会更流畅
@@ -361,6 +571,7 @@
   <div class="hint">不开启摄像头也能挥动逗猫棒，让猫的眼睛跟着棒尖</div>
   <div class="hint" id="loadHint">首次打开要先下载约 15&nbsp;MB 的识别模型，请耐心等 10~30 秒（按钮会显示“正在加载识别模型…”）。<br>
   如果点「开启摄像头」后一直没反应，多半是权限弹窗被拦住了：点地址栏左侧的摄像头图标允许权限，或直接刷新页面重新打开。</div>
+  <div class="issue">ISSUE 01 · 网页猫猫 · MMXXVI</div>
 </div>
 
 <script type="importmap">
