@@ -3336,7 +3336,7 @@ boot();
   const FILES={knead:'knead.mp3',stretch:'stretch.mp3',dance:'dance.mp3',
                sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',
                heart:'heart.mp3',heartbeat:'heartbeat.mp3'};
-  const FILE_GAIN={knead:1.0,stretch:1.0,dance:1.0,sniff:0.5,step:0.8,pounce:1.0,heart:1.0,heartbeat:0.95};
+  const FILE_GAIN={knead:0.5,stretch:0.8,dance:1.0,sniff:0.5,step:0.32,pounce:1.0,heart:1.0,heartbeat:0.95};   // step -60%、stretch -20%、knead -50%
   async function loadAll(){
     for(const k in FILES){
       const base=FILES[k].replace(/\.(mp3|m4a)$/,'');
