@@ -274,9 +274,11 @@
   </defs>
   <line id="wandRod" x1="0" y1="0" x2="0" y2="0"></line>
   <g id="wandTip">
+    <g transform="scale(1.8225)">
     <circle r="18" fill="url(#candyGrad)" stroke="#9c132b" stroke-width="1.2"/>
     <path d="M 0.00,-0.00 L 0.02,-0.12 L 0.08,-0.24 L 0.17,-0.33 L 0.29,-0.40 L 0.44,-0.44 L 0.61,-0.44 L 0.78,-0.40 L 0.95,-0.31 L 1.11,-0.18 L 1.25,0.00 L 1.36,0.22 L 1.43,0.46 L 1.45,0.74 L 1.42,1.03 L 1.33,1.33 L 1.18,1.62 L 0.96,1.89 L 0.70,2.14 L 0.37,2.35 L 0.00,2.50 L -0.41,2.59 L -0.85,2.62 L -1.31,2.56 L -1.76,2.43 L -2.21,2.21 L -2.63,1.91 L -3.01,1.53 L -3.33,1.08 L -3.58,0.57 L -3.75,0.00 L -3.83,-0.61 L -3.80,-1.24 L -3.68,-1.87 L -3.44,-2.50 L -3.09,-3.09 L -2.65,-3.64 L -2.10,-4.12 L -1.47,-4.52 L -0.76,-4.81 L -0.00,-5.00 L 0.80,-5.06 L 1.62,-4.99 L 2.44,-4.79 L 3.23,-4.45 L 3.98,-3.98 L 4.65,-3.38 L 5.23,-2.67 L 5.71,-1.85 L 6.05,-0.96 L 6.25,-0.00 L 6.30,1.00 L 6.18,2.01 L 5.90,3.01 L 5.46,3.97 L 4.86,4.86 L 4.11,5.66 L 3.23,6.35 L 2.24,6.90 L 1.15,7.28 L 0.00,7.50 L -1.19,7.53 L -2.39,7.37 L -3.58,7.02 L -4.70,6.47 L -5.75,5.75 L -6.67,4.85 L -7.46,3.80 L -8.08,2.63 L -8.52,1.35 L -8.75,0.00 L -8.77,-1.39 L -8.56,-2.78 L -8.13,-4.14 L -7.48,-5.44 L -6.63,-6.63 L -5.58,-7.69 L -4.37,-8.58 L -3.01,-9.27 L -1.54,-9.75 L -0.00,-10.00 L 1.58,-10.00 L 3.17,-9.75 L 4.71,-9.24 L 6.17,-8.49 L 7.51,-7.51 L 8.70,-6.32 L 9.69,-4.94 L 10.46,-3.40 L 10.99,-1.74 L 11.25,-0.00 L 11.23,1.78 L 10.94,3.55 L 10.36,5.28 L 9.51,6.91 L 8.40,8.40 L 7.05,9.71 L 5.50,10.80 L 3.79,11.65 L 1.94,12.22 L 0.00,12.50 L -1.97,12.47 L -3.94,12.13 L -5.85,11.47 L -7.64,10.52 L -9.28,9.28 L -10.72,7.79 L -11.92,6.07 L -12.84,4.17 L -13.46,2.13 L -13.75,0.00 L -13.70,-2.17 L -13.31,-4.33 L -12.59,-6.41 L -11.53,-8.38 L -10.16,-10.16 L -8.52,-11.73 L -6.64,-13.03 L -4.56,-14.03 L -2.33,-14.69 L -0.00,-15.00" fill="none" stroke="#ffffff" stroke-width="3.1" stroke-linecap="round" opacity=".92"/>
     <ellipse cx="-6.2" cy="-7" rx="4.6" ry="3.1" fill="#ffffff" opacity=".38"/>
+    </g>
   </g>
 </svg>
 
@@ -419,7 +421,7 @@ const STATE = {
   kiss:{active:false, t:0, gaze:0, cool:0},  // 对视触发的慢眨眼（猫咪之吻）
   pupil:0,                // 瞳孔放大程度 0-1 平滑
   // 第八档：活动状态机与表情
-  action:'idle',          // idle / walkIn / stretch / knead / shake / sit / notice / pounce / hop
+  action:'idle',          // idle / walkIn / stretch / knead / shake / sit / notice / pounce / dance / sniff
   actionT:0,              // 当前动作计时
   actionCool:1.5,         // 自主活动间隔（开局很快开始走动）
   walkPhase:0,            // 四腿步态相位
@@ -437,7 +439,6 @@ const STATE = {
   noticeT:0,              // notice（指向手势）的警觉停顿计时
   _pinchHeld:false,       // 上一帧是否处于捏合（用于上升沿触发，避免持续捏合反复扑玩）
   pounceCool:0,           // 扑玩结束后的冷却
-  hopCool:0, hopDir:1, _hopY:0,   // 夸张互动：左右蹦两下的冷却/方向/离地高度
   // 去抖门控（降低切换灵敏度）与对视状态
   _gates:{presence:mkGate(),point:mkGate()},
   mutual:{active:false,inT:0,outT:0},   // 对视：用户看向猫才回看，非连续跟随
@@ -1412,7 +1413,7 @@ function clampFootToGround(b, groundY){
 }
 
 /* ---- 状态文字：蹲伏/惊讶优先，其余用动作中文名 ---- */
-const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',hop:'蹦跳',sniff:'凑近闻闻',dance:'手舞足蹈',
+const ACTION_LABELS={walkIn:'走过来',stretch:'伸懒腰',knead:'踩奶',sniff:'凑近闻闻',dance:'手舞足蹈',
                      pounce:'扑玩',sit:'坐着',shake:'抖毛',notice:'发现你了'};
 function updateMoodLabel(c){
   let mood;
@@ -1451,6 +1452,7 @@ function updateMoodLabel(c){
 
 /* ---- 最近互动提示：记一次名字，状态栏显示 3 秒 ---- */
 function noteAct(name){
+  if(window.__sfxNote){ try{ window.__sfxNote(name); }catch(e){} }
   STATE.lastAct=name;
   STATE.lastActT=(typeof clock!=='undefined'&&clock)?clock.elapsedTime:performance.now()/1000;
   // 互动后给一段"专注期"：不马上开始自主动作，让用户看到猫在回应自己
@@ -1568,7 +1570,7 @@ function updateActions(t, dt){
     STATE.sessT+=dt;
     if(STATE.sessT>=SESS_MAX || STATE.overstim>=1){
       STATE.top='free'; STATE.coolT=2+Math.random()*2; STATE.gazeT=-1;   // 原地冷却 2~4s 随机
-      STATE.moveX=0; STATE._hopY=0; STATE.action='idle'; STATE.actionT=0;
+      STATE.moveX=0; STATE.action='idle'; STATE.actionT=0;
       STATE.actionCool=1.5+Math.random()*1.5;
       resetStanceAnchors();
     }
@@ -1887,9 +1889,9 @@ function updateActions(t, dt){
     }
     else if(STATE.action==='dance'){ if(STATE.actionT>=DANCE_DUR) toIdle(); }
   };
-  if(STATE.top==='free' && STATE.action!=='walkIn' && STATE.action!=='pounce' && STATE.action!=='hop'){
+  if(STATE.top==='free' && STATE.action!=='walkIn' && STATE.action!=='pounce'){
     runAutonomous();              // 自由态（含冷却）：原地自理，不看你
-  } else if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='walkIn' && STATE.action!=='hop'){
+  } else if(STATE.top==='engaged' && STATE.action!=='pounce' && STATE.action!=='walkIn'){
     // 互动态：指向 point 给正面警觉反应；其余时间承接日常自理（含抖毛/伸懒腰等），与互动叠加
     const pointCond = gNow==='point';
     const wasPoint = G.point.on;
@@ -1977,29 +1979,11 @@ function updateActions(t, dt){
   // ===== 6) 移动、步态与 root 位移 =====
   // walkIn 已在状态机块沿 z 直走；pounce 压低后前扑（只沿 z 朝屏幕，无转向）
   const act=STATE.action;
+  // 音效钩子：动作切换事件（由附加模块 window.__sfxTick 响应，未加载时无副作用）
+  if(window.__sfxTick) { try{ window.__sfxTick(dt,STATE,act); }catch(e){} }
   if(act==='pounce') STATE.actionT+=dt;  // pounce 在状态机外计时
-  if(act==='hop'){
-    // 6.5s / 共 6 次起跳：原地两下 → 向左 → 回中 → 向右 → 回中
-    STATE.actionT+=dt;
-    const HOP_D=5.2, tt=STATE.actionT;
-    const easeIO=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
-    // 每段弧线占满整段：落地瞬间立刻接下一次起跳，动作连贯无停顿（整体比上一版快 20%）
-    const FAST=1.0;
-    const arc=k=>Math.sin(Math.PI*Math.min(1,Math.max(0,k)))*.055;
-    // [开始, 结束, 起点x, 终点x] —— 每段一次独立抛物线起跳
-    const SEG=[[0,.80,0,0],[.80,1.60,0,0],[1.60,2.56,0,-.11],
-               [2.56,3.52,-.11,0],[3.52,4.48,0,.11],[4.48,5.20,.11,0]];
-    let x=0,y=0;
-    for(const [a,b,x0,x1] of SEG){
-      if(tt>=a && tt<b){
-        const k=(tt-a)/(b-a), kf=Math.min(1,k/FAST);   // kf: 60% 时间内完成起跳到落地
-        x=x0+(x1-x0)*easeIO(kf); y=arc(kf); break;
-      }
-    }
-    STATE.moveX=x; STATE._hopY=y;
-    if(tt>=HOP_D){ STATE.moveX=0; STATE._hopY=0; toIdle(); }
-  }
-  const at=STATE.actionT;
+  // [已删除] hop（蹦跳）：从未被触发的休眠动作，连同其弧线/位移逻辑一并移除
+const at=STATE.actionT;
   // 伸懒腰包络：3.4s，四个平滑段（起 → 前伸 → 弓背保持 → 收），全部用 smoothstep
   // 旧版是两段 clip 线性叠加，起收都带折角，看起来"弹"——这是不自然的根源
   let stReach=0, stArch=0;
@@ -2031,7 +2015,7 @@ function updateActions(t, dt){
     STATE.moveX=THREE.MathUtils.clamp((STATE.moveZ-JOIN_Z)/PEAK,0,1)*leanPeak;
   }
   // 兜底：蹦跳/扑玩被其它状态打断时，横向偏移必须归零，否则猫会卡在偏离定点的位置
-  if(act!=='hop' && act!=='pounce' && act!=='walkIn' && act!=='sniff') STATE.moveX=damp(STATE.moveX,0,12,dt);
+  if(act!=='pounce' && act!=='walkIn' && act!=='sniff') STATE.moveX=damp(STATE.moveX,0,12,dt);
   // 步态：walkIn 直走时启用脚部步态（沿 z 前进，不整身滑动），pounce 走专属逻辑
   const feetOn = act==='walkIn' || (act==='sniff' && moving>0);
   GAIT.effStride=damp(GAIT.effStride,GAIT.stride,8,dt);
@@ -2087,7 +2071,7 @@ const D=.09*c + SITT.D*s;
     stPitch=.34*plateauEnvelope(at,.30,1.05,2.75,3.60); }    // 整身前倾约 19°：脊柱与前腿连成一条斜线（弧线）
   rig.root.position.set(
     STATE.moveX + swayLat*Math.cos(GAIT.yaw),
-    -D+bob-GAIT.turnDip-stDip+breathY+STATE._hopY+(STATE._danceHop||0),
+    -D+bob-GAIT.turnDip-stDip+breathY+(STATE._danceHop||0),
     STATE.moveZ - swayLat*Math.sin(GAIT.yaw)
   );
   const sway=(1-c*.6)*(1-moving*.7)*motion;
@@ -2448,8 +2432,8 @@ const D=.09*c + SITT.D*s;
       if(STATE._hPrev && nowW-STATE._hPrev.t<.35){
         const sp=Math.hypot(hd.x-STATE._hPrev.x, hd.y-STATE._hPrev.y)/dtW;
         const dir=Math.sign(hd.x-STATE._hPrev.x);
-        if(sp>1.7 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*5.0;   // 方向反转才算"挥"
-        else if(sp>3.2) STATE._waveE=(STATE._waveE||0)+dtW*1.2;
+        if(sp>1.2 && dir!==0 && STATE._hDir!==undefined && dir!==STATE._hDir) STATE._waveE=(STATE._waveE||0)+dtW*6.5;   // 方向反转才算"挥"
+        else if(sp>2.3) STATE._waveE=(STATE._waveE||0)+dtW*1.8;
         if(dir!==0) STATE._hDir=dir;
       }
       STATE._hPrev={x:hd.x,y:hd.y,t:nowW};
@@ -2459,15 +2443,15 @@ const D=.09*c + SITT.D*s;
       if(STATE._wPrev && nowW-STATE._wPrev.t<.35){
         const sp=Math.hypot(STATE.pointer.x-STATE._wPrev.x, STATE.pointer.y-STATE._wPrev.y)/dtW;
         const dir=Math.sign(STATE.pointer.x-STATE._wPrev.x);
-        if(sp>1.6 && dir!==0 && STATE._wDir!==undefined && dir!==STATE._wDir) STATE._waveE=(STATE._waveE||0)+dtW*6.0;
-        else if(sp>3.0) STATE._waveE=(STATE._waveE||0)+dtW*1.4;
+        if(sp>1.1 && dir!==0 && STATE._wDir!==undefined && dir!==STATE._wDir) STATE._waveE=(STATE._waveE||0)+dtW*7.5;
+        else if(sp>2.1) STATE._waveE=(STATE._waveE||0)+dtW*2.0;
         if(dir!==0) STATE._wDir=dir;
       }
       STATE._wPrev={x:STATE.pointer.x,y:STATE.pointer.y,t:nowW};
     } else { STATE._wPrev=null; STATE._wDir=undefined; }
     // 能量衰减 + 触发
-    STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.6);
-    if(STATE._waveE>=.85 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
+    STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.42);
+    if(STATE._waveE>=.58 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
        && (STATE.action==='idle'||STATE.action==='sit')){
       STATE._waveE=0; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
       STATE.danceCool=5.0; noteAct('手舞足蹈');
@@ -2655,13 +2639,14 @@ addEventListener('pointerdown', e=>{
   STATE.pounceTarget.y=e.clientY/innerHeight;
   STATE.clickPounce=true;
   _wandJig=Math.min(.35, _wandJig+.18);   // 棒子被戳一下：快速抖动
+  _candyPulse=1;                          // 糖果瞬间放大 100%，随后回弹
 });
 
 /* 逗猫棒：棒尖跟随指针（带轻微重量感的平滑），细棍从右下屏外伸入到棒尖 */
 const wandRod=document.getElementById('wandRod'),
       wandTipG=document.getElementById('wandTip'), metalGrad=document.getElementById('metalGrad');
 let _wx=innerWidth/2,_wy=innerHeight*.62,_wandInit=false,_wAng=-Math.PI/2;
-let _wandJig=0, _wandLast=performance.now()/1000;   // 点击逗猫棒的快速抖动（0~.35s，可叠加）
+let _wandJig=0, _candyPulse=0, _wandLast=performance.now()/1000;   // 点击逗猫棒的快速抖动（0~.35s，可叠加）
 const WAND_LEN=230;   // 棒棒糖纸棒总长；指针热点在棒身中点（重心），糖果端朝猫
 function updateWand(){
   if(STATE.inputMode!=='mouse') return;
@@ -2678,6 +2663,7 @@ function updateWand(){
   const nowS=performance.now()/1000;
   const dtJ=Math.min(.1, Math.max(0, nowS-_wandLast)); _wandLast=nowS;
   if(_wandJig>0) _wandJig=Math.max(0,_wandJig-dtJ*1.9);
+  if(_candyPulse>0) _candyPulse=Math.max(0,_candyPulse-dtJ*2.2);
   const jigK=Math.min(1,_wandJig/.18);
   const jigX=_wandJig>0?Math.sin(nowS*72)*9*jigK:0;
   const jigY=_wandJig>0?Math.sin(nowS*61+1.7)*7*jigK:0;
@@ -2688,7 +2674,13 @@ function updateWand(){
   const hx=_wx+jigX-Math.cos(ang)*half, hy=_wy+jigY-Math.sin(ang)*half; // 手柄端
   wandRod.setAttribute('x1',hx); wandRod.setAttribute('y1',hy);
   wandRod.setAttribute('x2',cx); wandRod.setAttribute('y2',cy);
-  wandTipG.setAttribute('transform',`translate(${cx},${cy})`);
+  {
+    // 点击瞬间：糖果 + 棍子一起放大 100%（指数回弹），形成"啵"的一下
+    const pk=_candyPulse*_candyPulse*(3-2*_candyPulse);   // smoothstep
+    const sc=1+pk*1.0;
+    wandTipG.setAttribute('transform',`translate(${cx},${cy}) scale(${sc.toFixed(3)})`);
+    wandRod.setAttribute('stroke-width',(5.5*sc).toFixed(2));   // 棍子同步变粗
+  }
   // 金属渐变沿棒身法向（圆柱横截面高光）
   const px=-Math.sin(ang), py=Math.cos(ang), hw=2.6;
   metalGrad.setAttribute('x1',_wx+px*hw); metalGrad.setAttribute('y1',_wy+py*hw);
@@ -3297,11 +3289,258 @@ function boot(){
     const hb2=[-0.0068,-0.0024,0.0020,0.0064].map(v=>v*HP.spread);
     const mkh=(mir)=>[{c:[-0.0002,yH+(HP.mainY/100),zMain],r:0.0052*HP.mainR,sx:1.10,sy:hmd,sz:1},
       ...hb2.map((x,i)=>({c:[mir*(x+hX[i]),yH,zToe+hT[i]],r:0.0034*HP.size,sx:1,sy:hd,sz:1}))];
-    add(rig.bones.leg3_R,mkh(1)); add(rig.bones.leg3_L,mkh(-1));
+    // [已移除] 后爪肉垫：按需求删除（后爪骨骼变形下容易穿模/错位）
+    // add(rig.bones.leg3_R,mkh(1)); add(rig.bones.leg3_L,mkh(-1));
     console.log('extras attached');
   });
 }
 boot();
+</script>
+<script type="module">
+// ===== 卡通音效（WebAudio 实时合成，零文件、零版权） =====
+(function(){
+  let ac=null, master=null, noiseBuf=null, ready=false;
+  const VOL=1.5;                         // 总音量（+50%）
+  function boot(){
+    if(ac) return;
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    ac=new AC(); master=ac.createGain(); master.gain.value=VOL; master.connect(ac.destination);
+    const n=ac.sampleRate*1.0, b=ac.createBuffer(1,n,ac.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+    noiseBuf=b; ready=true; loadAll();
+  }
+  ['pointerdown','keydown','touchstart'].forEach(ev=>window.addEventListener(ev,()=>{ try{ boot(); if(ac&&ac.state!=='running') ac.resume&&ac.resume(); }catch(e){} },{passive:true}));
+  function now(){ return ac?ac.currentTime:0; }
+  function gainNode(t,peak,atk,dur){
+    const g=ac.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,peak),t+atk);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+atk+dur);
+    return g;
+  }
+  function noise(t,dur,peak,freq,q,type){
+    const s=ac.createBufferSource(); s.buffer=noiseBuf;
+    const f=ac.createBiquadFilter(); f.type=type||'bandpass'; f.frequency.value=freq; f.Q.value=q||1;
+    const g=gainNode(t,peak,0.005,dur);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+dur+0.05);
+  }
+  function tone(t,f0,f1,dur,peak,type,vib){
+    const o=ac.createOscillator(), g=gainNode(t,peak,0.008,dur);
+    o.type=type||'sine'; o.frequency.setValueAtTime(f0,t);
+    if(f1&&f1!==f0) o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur);
+    if(vib){ const l=ac.createOscillator(), lg=ac.createGain(); l.frequency.value=vib[0]; lg.gain.value=vib[1];
+      l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t+dur+0.05); }
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+  }
+  // ---- 真实录音优先：cat_audio/sfx/<name>.mp3 存在则用录音，否则回退合成音 ----
+  const BUF={};
+  const FILES={knead:'knead.mp3',stretch:'stretch.mp3',shake:'shake.mp3',dance:'dance.mp3',
+               sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',kiss:'kiss.mp3'};
+  const FILE_GAIN={knead:1.0,stretch:1.0,shake:0.95,dance:1.0,sniff:0.9,step:0.8,pounce:1.0,kiss:1.0};
+  async function loadAll(){
+    for(const k in FILES){
+      try{
+        const r=await fetch('./cat_audio/sfx/'+FILES[k]);
+        if(!r.ok) continue;
+        BUF[k]=await ac.decodeAudioData(await r.arrayBuffer());
+      }catch(e){}
+    }
+  }
+  function play(name,t){
+    if(!BUF[name]) return false;
+    const s=ac.createBufferSource(); s.buffer=BUF[name];
+    const g=ac.createGain(); g.gain.value=FILE_GAIN[name]||1;
+    s.connect(g); g.connect(master); s.start(t); return true;
+  }
+  const cool={}; function ok(k,ms){ const t=performance.now(); if(cool[k]&&t-cool[k]<ms) return false; cool[k]=t; return true; }
+
+  const S={};
+  S.meow=(t,pitch=1,len=0.34,peak=0.16)=>{          // 卡通喵：双共振峰滑音
+    tone(t,520*pitch,760*pitch,len,peak,'sawtooth',[26,6]);
+    tone(t+0.02,1040*pitch,1420*pitch,len*0.9,peak*0.35,'sine');
+    noise(t,0.10,peak*0.22,1800,2.2);
+  };
+  S.knead=(t)=>{ tone(t,95,72,0.16,0.20,'sine'); noise(t,0.09,0.05,900,1.4); };
+  S.step=(t)=>{ tone(t,80,58,0.11,0.13,'sine'); noise(t,0.06,0.03,700,1.2); };
+  S.stretch=(t)=>{ tone(t,300,720,0.75,0.14,'sine',[5.5,14]); tone(t+0.1,600,1200,0.6,0.06,'sine'); };
+  S.shake=(t)=>{ for(let i=0;i<7;i++) noise(t+i*0.055,0.05,0.13-i*0.01,2600+i*300,3.5); };
+  S.dance=(t)=>{ [1,1.18,1.35].forEach((p,i)=>S.meow(t+i*0.22,p,0.22,0.11)); noise(t,0.6,0.03,3000,2); };
+  S.sniff=(t)=>{ noise(t+0.02,0.13,0.06,1500,1.6); noise(t+0.22,0.13,0.055,1400,1.6); noise(t+0.42,0.12,0.045,1300,1.6); };
+  S.pounce=(t)=>{ S.meow(t,1.05,0.16,0.15); tone(t+0.95,70,52,0.20,0.16,'sine'); noise(t+0.95,0.10,0.06,600,1.2); };
+  S.kiss=(t)=>{ tone(t,700,1150,0.22,0.10,'sine',[14,10]); tone(t+0.16,1050,1500,0.16,0.06,'sine'); };
+
+  // 动作切换驱动
+  let last=null, walkT=0, kneadT=0, sniffT=0;
+  window.__sfxTick=function(dt,STATE,act){
+    if(!ready||!ac||ac.state!=='running') return;
+    if(act!==last){
+      const t=now();
+      if(act==='walkIn'&&ok('walk',400)){ walkT=0; }
+      if(act==='stretch'&&ok('stretch',1200)){ if(!play('stretch',t+0.05)) S.stretch(t+0.05); }
+      if(act==='knead'&&ok('knead',900)){ kneadT=0; }
+      if(act==='shake'&&ok('shake',800)){ if(!play('shake',t)) S.shake(t); }
+      if(act==='dance'&&ok('dance',1200)){ if(!play('dance',t)) S.dance(t); }
+      if(act==='sniff'&&ok('sniff',1200)){ if(!play('sniff',t+0.08)) S.sniff(t+0.08); }
+      if(act==='pounce'&&ok('pounce',900)){ if(!play('pounce',t+0.05)) S.pounce(t+0.05); }
+      last=act;
+    }
+    if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.42; if(!play('step',now())) S.step(now()); } }
+    if(act==='knead'){ kneadT-=dt; if(kneadT<=0){ kneadT=0.46; if(!play('knead',now())) S.knead(now()); } }
+  };
+  // 互动事件驱动
+  window.__sfxNote=function(name){
+    if(!ready||!ac||ac.state!=='running') return;
+    if(name==='猫咪之吻'&&ok('kiss',1500)){ if(!play('kiss',now()+0.05)) S.kiss(now()+0.05); }
+  };
+})();
+</script>
+<script type="module">
+// ===== 试验：爱心烟花（摄像头开启 + 每 6 次亲吻触发一次） + 棒尖彩虹 =====
+(function(){
+  const rcv=document.createElement('canvas'); rcv.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:7';
+  const hcv=document.createElement('canvas'); hcv.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:9510';
+  document.body.appendChild(rcv); document.body.appendChild(hcv);
+  const rg=rcv.getContext('2d'), hg=hcv.getContext('2d');
+  function fit(){ [rcv,hcv].forEach(c=>{c.width=innerWidth;c.height=innerHeight;}); }
+  fit(); addEventListener('resize',fit);
+
+  // ---------- 爱心（烟花式） ----------
+  const heart={on:false,t:0,dur:2.6,x0:0,y0:0};
+  const parts=[];               // 溶解粒子
+  let kissCount=0;
+  function mouthScreenPos(){
+    try{ const rig=window.rig;
+      if(rig&&rig.bones&&rig.bones.Bone004&&window.camera){
+        const p=rig.bones.Bone004.getWorldPosition(new THREE.Vector3()).clone();
+        p.y-=0.028; p.z+=0.02; p.project(window.camera);
+        return [(p.x*.5+.5)*hcv.width,(-p.y*.5+.5)*hcv.height]; } }catch(e){}
+    return [hcv.width/2,hcv.height*0.56];
+  }
+  function fireHeart(){
+    const [x,y]=mouthScreenPos(); heart.on=true; heart.t=0; heart.x0=x; heart.y0=y; parts.length=0;
+    heart.path=Math.floor(Math.random()*4);      // 0 直线 / 1 S形 / 2 螺旋 / 3 高抛
+  }
+  function heartPath(ctx,x,y,s,rot){
+    ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(s/16,s/16);
+    ctx.beginPath(); ctx.moveTo(0,4);
+    ctx.bezierCurveTo(-9,-2,-9,-11,-3.5,-11); ctx.bezierCurveTo(-1,-11,0,-8.5,0,-7);
+    ctx.bezierCurveTo(0,-8.5,1,-11,3.5,-11); ctx.bezierCurveTo(9,-11,9,-2,0,4);
+    ctx.closePath(); ctx.restore();
+  }
+
+  // ---------- 彩虹（0.4s / 22px） ----------
+  const trail=[]; const TRAIL_MS=400;
+  const wandEl=document.getElementById('wand'), tipEl=document.getElementById('wandTip');
+  function tipScreen(){ if(!wandEl||!wandEl.classList.contains('on')||!tipEl) return null;
+    const r=tipEl.getBoundingClientRect(); if(!r||(!r.width&&!r.height)) return null;
+    return [r.left+r.width/2,r.top+r.height/2]; }
+  let last=performance.now(), lx=null, ly=null;
+  function frame(now){
+    const dt=Math.min(.05,(now-last)/1000); last=now;
+    // 彩虹
+    rg.clearRect(0,0,rcv.width,rcv.height);
+    const wp=tipScreen();
+    if(wp){ const cx=wp[0],cy=wp[1]; let dx=0,dy=0;
+      if(lx!==null){dx=cx-lx;dy=cy-ly;} lx=cx;ly=cy;
+      const d=Math.hypot(dx,dy)||1, back=34;
+      trail.push({x:cx-dx/d*back,y:cy-dy/d*back,t:performance.now()});
+      if(trail.length>120) trail.shift();
+    } else { lx=null; ly=null; }
+    const tnow=performance.now();
+    const pts=trail.filter(p=>tnow-p.t<TRAIL_MS);
+    for(let i=1;i<pts.length;i++){
+      const a=pts[i-1],b=pts[i];
+      const life=Math.max(0,1-(tnow-b.t)/TRAIL_MS); if(life<=0) continue;
+      const hue=(i*10+tnow*0.09)%360;
+      rg.strokeStyle=`hsla(${hue},96%,62%,${life*.9})`;
+      rg.lineWidth=Math.max(3,22*life); rg.lineCap='round';
+      rg.shadowBlur=26; rg.shadowColor=`hsla(${hue},96%,72%,${life*.85})`;
+      rg.beginPath(); rg.moveTo(a.x,a.y); rg.lineTo(b.x,b.y); rg.stroke();
+    }
+    rg.shadowBlur=0;
+
+    // 爱心：飞到中央铺满屏幕 → 烟花溶解
+    hg.clearRect(0,0,hcv.width,hcv.height);
+    if(heart.on){
+      heart.t+=dt;
+      const k=Math.min(1,heart.t/heart.dur);
+      const growK=Math.min(1,k/0.62);                       // 62% 时间用于长大
+      const e=growK<.5?2*growK*growK:1-Math.pow(-2*growK+2,2)/2;
+      const cx=hcv.width/2, cy=hcv.height/2;
+      const maxS=Math.max(hcv.width,hcv.height)*0.62;       // 最终铺满屏幕
+      const s=14+maxS*Math.pow(e,1.5);
+      // 终点精确居中：心形质心略偏上，用 s*0.17 补偿，保证末态整体居中
+      let x=heart.x0+(cx-heart.x0)*e, y=heart.y0+(cy-heart.y0)*e + s*0.17;
+      const fadeOut=1-e;                            // 所有偏移都乘以 fadeOut，确保终点精确居中
+      const PH=heart.path|0;
+      if(PH===0){ y-=Math.sin(Math.PI*e)*70; }                                  // 直线：轻上扬
+      else if(PH===1){ x+=Math.sin(e*Math.PI*3)*130*fadeOut; y-=Math.sin(Math.PI*e)*60; }   // S 形摆动
+      else if(PH===2){ const ang2=e*Math.PI*3.2, r2=110*fadeOut;
+                       x+=Math.cos(ang2)*r2; y+=Math.sin(ang2)*r2-Math.sin(Math.PI*e)*40; }  // 螺旋收束
+      else { y-=Math.sin(Math.PI*e)*240; x+=Math.sin(e*Math.PI)*60*fadeOut; }   // 高抛大弧
+      // 0.62~0.78 为"定住呈心形"阶段（完全显形），之后才是烟花溶解
+      const alpha = k<0.62 ? Math.min(1,k/0.55) : (k<0.78 ? 1 : Math.max(0,1-(k-0.78)/0.22));
+      // 光晕
+      const grd=hg.createRadialGradient(x,y,0,x,y,s*1.2);
+      grd.addColorStop(0,`rgba(255,140,190,${Math.min(.55,alpha*.5)})`);
+      grd.addColorStop(1,'rgba(255,110,170,0)');
+      hg.fillStyle=grd; hg.beginPath(); hg.arc(x,y,s*1.2,0,6.283); hg.fill();
+      // 心形
+      hg.save(); hg.globalAlpha=alpha;
+      heartPath(hg,x,y,s,Math.sin(k*Math.PI*2)*0.12);
+      hg.fillStyle='rgba(255,105,168,1)'; hg.fill();
+      hg.strokeStyle='rgba(255,244,250,.9)'; hg.lineWidth=Math.max(1.2,s*0.012); hg.stroke();
+      hg.restore();
+      // 烟花溶解：k>0.72 时从边缘炸出粒子
+      if(k>0.78 && parts.length===0){
+        const n=160;
+        for(let i=0;i<n;i++){
+          const a2=Math.random()*6.283, sp=160+Math.random()*520;
+          parts.push({x:x+Math.cos(a2)*s*0.35, y:y+Math.sin(a2)*s*0.35,
+            vx:Math.cos(a2)*sp, vy:Math.sin(a2)*sp-120, l:1,
+            hue:330+Math.random()*40, sz:2+Math.random()*5});
+        }
+      }
+      for(let i=parts.length-1;i>=0;i--){
+        const p=parts[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=260*dt; p.vx*=.985; p.l-=dt*0.75;
+        if(p.l<=0){ parts.splice(i,1); continue; }
+        hg.fillStyle=`hsla(${p.hue},95%,70%,${p.l})`;
+        hg.beginPath(); hg.arc(p.x,p.y,p.sz*p.l,0,6.283); hg.fill();
+      }
+      if(k>=1) heart.on=false;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // 触发：摄像头开启 且 每 6 次猫咪之吻
+  const prevNote=window.__sfxNote;
+  window.__sfxNote=function(n){ try{ prevNote&&prevNote(n); }catch(e){}
+    if(n!=='猫咪之吻') return;
+    const camOn=!!(window.STATE&&window.STATE.camOn);
+    if(!camOn) return;
+    kissCount++;
+    if(kissCount%3===0) fireHeart();
+  };
+
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;right:12px;bottom:12px;z-index:9600;background:rgba(16,20,26,.92);color:#e6edf5;'+
+    'font:12px/1.6 -apple-system,PingFang SC,sans-serif;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:10px 12px;text-align:center;max-width:230px';
+  box.innerHTML='<div style="font-weight:600;margin-bottom:6px">特效试验</div>'+
+    '<div id="cnt" style="opacity:.85;font-family:ui-monospace,monospace;font-size:11px;margin-bottom:4px">亲吻计数 0/3</div>'+
+    '<button id="tKiss" style="display:block;width:100%;margin:3px 0;padding:5px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,120,170,.22);color:#fff;font:inherit;cursor:pointer">模拟 1 次亲吻</button>'+
+    '<button id="tHeart" style="display:block;width:100%;margin:3px 0;padding:5px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,120,170,.32);color:#fff;font:inherit;cursor:pointer">直接测试爱心</button>'+
+    '<label style="display:block;margin-top:5px;font-size:11px;opacity:.8"><input type="checkbox" id="simCam" checked> 模拟摄像头已开启</label>';
+  document.body.appendChild(box);
+  const cntEl=box.querySelector('#cnt');
+  box.querySelector('#tKiss').onclick=()=>{
+    if(!box.querySelector('#simCam').checked) return;
+    kissCount++; cntEl.textContent=`亲吻计数 ${kissCount%3||3}/6`;
+    if(kissCount%3===0) fireHeart();
+  };
+  box.querySelector('#tHeart').onclick=fireHeart;
+  box.querySelector('#simCam').onchange=e=>{ if(!e.target.checked) cntEl.textContent='需要摄像头'; };
+})();
 </script>
 </body>
 </html>
