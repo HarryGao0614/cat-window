@@ -350,6 +350,10 @@
 
 <div id="gate">
   <h2>网页猫猫</h2>
+  <div style="margin:6px 0 14px;padding:10px 14px;border-radius:10px;background:rgba(255,196,96,.13);
+              border:1px solid rgba(255,196,96,.42);color:#ffe3ae;font-size:13px;line-height:1.6;text-align:left">
+    <b>使用提示</b>：建议使用 Chrome / Edge / Safari 等现代浏览器；<b>国内网络建议科学上网</b>，加载与交互会更流畅。
+  </div>
   <p>打开摄像头，让猫看见你。它会用眼睛追随你的脸和手，尾巴与身体随你的动作作出反应。所有识别都在你的浏览器本地完成，画面不会上传。</p>
   <button id="startBtn">开启摄像头</button>
   <p id="camErr" role="alert"></p>
@@ -3386,7 +3390,7 @@ boot();
       if(act==='pounce'&&ok('pounce',900)){ if(!play('pounce',t+0.05)) S.pounce(t+0.05); }
       last=act;
     }
-    if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.215; if(!play('step',now())) S.step(now()); } }   // 步频 +30%
+    if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.43; if(!play('step',now())) S.step(now()); } }   // 每两步落地播一次（与步态 4 拍/周期对齐）
     if(act==='knead'){ kneadT-=dt; if(kneadT<=0){ kneadT=0.46; if(!play('knead',now())) S.knead(now()); } }
     // sniff：等猫咪走到镜头前（actionT≥1.5s）再播放嗅闻声
     if(act==='sniff'){
