@@ -3300,7 +3300,7 @@ boot();
 // ===== 卡通音效（WebAudio 实时合成，零文件、零版权） =====
 (function(){
   let ac=null, master=null, noiseBuf=null, ready=false;
-  const VOL=1.5;                         // 总音量（+50%）
+  const VOL=0.45;                        // 总音量（原 1.5 的 30%）
   function boot(){
     if(ac) return;
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
@@ -3335,8 +3335,9 @@ boot();
   // ---- 真实录音优先：cat_audio/sfx/<name>.mp3 存在则用录音，否则回退合成音 ----
   const BUF={};
   const FILES={knead:'knead.mp3',stretch:'stretch.mp3',dance:'dance.mp3',
-               sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',kiss:'kiss.mp3'};
-  const FILE_GAIN={knead:1.0,stretch:1.0,dance:1.0,sniff:0.5,step:0.8,pounce:1.0,kiss:1.0};   // sniff 音量下调约一半
+               sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',
+               heart:'heart.mp3',heartbeat:'heartbeat.mp3'};
+  const FILE_GAIN={knead:1.0,stretch:1.0,dance:1.0,sniff:0.5,step:0.8,pounce:1.0,heart:1.0,heartbeat:0.95};
   async function loadAll(){
     for(const k in FILES){
       const base=FILES[k].replace(/\.(mp3|m4a)$/,'');
@@ -3392,8 +3393,12 @@ boot();
   // 互动事件驱动
   window.__sfxNote=function(name){
     if(!ready||!ac||ac.state!=='running') return;
-    if(name==='猫咪之吻'&&ok('kiss',1500)){ if(!play('kiss',now()+0.05)) S.kiss(now()+0.05); }
+    // 猫咪之吻改为播放心跳声（原亲吻喵叫已挪给爱心特效）
+    if(name==='猫咪之吻'&&ok('hb',1600)){ if(!play('heartbeat',now()+0.02)) S.kiss(now()+0.02); }
   };
+  // 供特效模块调用：爱心触发音
+  window.__sfxPlay=function(name){ if(!ready||!ac||ac.state!=='running') return false;
+    if(!ok('fx_'+name,1200)) return false; return play(name, now()+0.02); };
 })();
 </script>
 <script type="module">
@@ -3419,6 +3424,7 @@ boot();
     return [hcv.width/2,hcv.height*0.56];
   }
   function fireHeart(){
+    if(window.__sfxPlay) try{ window.__sfxPlay('heart'); }catch(e){}   // 爱心触发音（原猫咪之吻喵叫）
     const [x,y]=mouthScreenPos(); heart.on=true; heart.t=0; heart.x0=x; heart.y0=y; parts.length=0;
     heart.path=Math.floor(Math.random()*4);      // 0 直线 / 1 S形 / 2 螺旋 / 3 高抛
   }
