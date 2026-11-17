@@ -399,27 +399,20 @@
   <div id="guideBody">
     <h4>看猫猫模式 · 人脸</h4>
     <ul>
-      <li><b>正对镜头停留</b>：猫咪回看，并慢慢眨眼（猫咪之吻）</li>
-      <li><b>眨眼</b>：猫咪回你一次慢眨眼</li>
-      <li><b>摆头</b>：猫咪跟着你一起摆头</li>
+      <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
       <li><b>捏合</b>：拇指与食指捏合，猫咪以为有东西可扑，会扑玩一下</li>
       <li><b>摇头</b>：猫咪抖抖耳朵，往一侧轻瞟</li>
-      <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
+      <li><b>时钟摆头</b>：猫咪跟着你一起摆头</li>
     </ul>
     <h4>看猫猫模式 · 手势</h4>
     <ul>
-      <li><b>张开手掌举到画面里</b>：猫咪举爪对掌</li>
+      <li><b>面对镜头击掌</b>：猫咪举爪对掌</li>
       <li><b>抚摸镜头</b>：手掌缓慢靠近镜头，猫咪眯眼放松，像被抚摸</li>
     </ul>
     <h4>逗猫棒模式</h4>
     <ul>
-      <li><b>移动逗猫棒</b>：猫咪的目光平滑跟着棒尖</li>
-      <li><b>快速点击</b>：棒子抖一下，猫咪朝点击处扑玩再退回</li>
       <li><b>快速来回挥动</b>：猫咪开心地手舞足蹈</li>
-    </ul>
-    <h4>猫咪自己会做</h4>
-    <ul>
-      <li>坐着、站着发呆、踩奶、抖毛、伸懒腰、扑玩（随时随机）</li>
+      <li><b>快速点击</b>：棒子抖一下，猫咪朝点击处扑玩再退回</li>
     </ul>
     <h4>通用</h4>
     <ul>
@@ -668,7 +661,7 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matc
 window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
-const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.054;
+const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.108;
 const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=3.10, SNIFF_HOLD=3.0, SNIFF_BACK=2.5;    // 走近更慢；嗅闻 +1s（节奏不变）   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=25;
 const DANCE_DUR=4.8;   // 手舞足蹈时长（连续三次点头触发）                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
@@ -1764,6 +1757,7 @@ function updateActions(t, dt){
     if(dist<=1e-4){
       STATE.moveX=0; STATE.moveZ=JOIN_Z; STATE.hasJoined=true;
       STATE.top='engaged'; STATE.action='idle'; STATE.actionT=0; STATE.sessT=0;
+      STATE.actionCool=0.4;   // 到定点后立刻开始自主动作（无需互动触发）
       resetStanceAnchors();
     }
   } else if(STATE.entered && STATE.top==='free'){
@@ -2070,10 +2064,9 @@ function updateActions(t, dt){
       // 抬爪或对视进行中不打断互动；安静时才随机安排日常小动作
       const busy=STATE.pawLift.L>.05||STATE.pawLift.R>.05||STATE.mutual.active;
       if(STATE.actionCool<=0 && !busy){
-        // 首轮展示：踩奶/抖毛/伸懒腰/扑玩 各 25%，四个都做过一次后转常规概率
-        const FRESH=['knead','shake','stretch','pounce'];
+        // 首轮：踩奶/抖毛/扑玩 —— 每个先各做两遍（且不连续重复），之后才转常规概率
+        const FRESH=['knead','shake','pounce','stretch'];
         STATE.seen=STATE.seen||{};
-        const unseen=FRESH.filter(a=>!STATE.seen[a]);
         const fire=(a)=>{
           if(a==='knead'){ STATE.action='knead'; STATE.actionT=0; }
           else if(a==='shake'){ STATE.action='shake'; STATE.actionT=0;
@@ -2081,17 +2074,35 @@ function updateActions(t, dt){
           else if(a==='stretch'){ STATE.action='stretch'; STATE.actionT=0; STATE.stretchSide=Math.random()<.5?-1:1; }
           else { STATE.pounceTarget={x:.3+Math.random()*.4,y:.35+Math.random()*.35};
                  STATE.action='pounce'; STATE.actionT=0; }
-          STATE.seen[a]=true;
+          STATE.seen[a]=(STATE.seen[a]||0)+1;
+          STATE._lastAuto=a;                       // 记录，用于避免连续重复
         };
-        if(unseen.length>0){ fire(unseen[(Math.random()*unseen.length)|0]); }   // 优先补齐没展示过的
-        else {
-          const r=Math.random();
-          if(r<.20){STATE.actionCool=1.6+Math.random()*1.8;}                                            // 站着发呆 20%
-          else if(r<.40){STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;}     // 坐着 20%
-          else if(r<.58){fire('knead');}                                                                // 踩奶 18%
-          else if(r<.76){fire('shake');}                                                                // 抖毛 18%
-          else if(r<.92){fire('stretch');}                                                              // 伸懒腰 16%
-          else {fire('pounce');}                                                                        // 扑玩 8%
+        const need=FRESH.filter(a=>(STATE.seen[a]||0)<2 && a!==STATE._lastAuto);
+        if(need.length>0){
+          fire(need[(Math.random()*need.length)|0]);
+        } else {
+          // 常规概率（站着/坐着/动作），并强制不与上一个自主动作相同
+          let pick=null;
+          for(let tries=0;tries<8;tries++){
+            const r=Math.random();
+            if(r<.20){ pick='stand'; break; }
+            else if(r<.40){ pick='sit'; break; }
+            else if(r<.58){ pick='knead'; break; }
+            else if(r<.76){ pick='shake'; break; }
+            else if(r<.92){ pick='stretch'; break; }
+            else { pick='pounce'; break; }
+          }
+          if(pick==='stand'||pick===STATE._lastAuto){
+            // 站着发呆 或 与上次重复 → 允许发呆（发呆本身不产生重复动作感）
+            if(pick===STATE._lastAuto && pick!=='stand'){ pick='stand'; }
+            STATE.actionCool=1.6+Math.random()*1.8;
+            STATE._lastAuto='stand';
+          } else if(pick==='sit'){
+            STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;
+            STATE._lastAuto='sit';
+          } else {
+            fire(pick);
+          }
         }
       }
     } else if(STATE.action==='stretch'){ if(STATE.actionT>=ST_DUR) toIdle(); }
@@ -2656,15 +2667,15 @@ const D=.09*c + SITT.D*s;
       if(STATE._wPrev && nowW-STATE._wPrev.t<.35){
         const sp=Math.hypot(STATE.pointer.x-STATE._wPrev.x, STATE.pointer.y-STATE._wPrev.y)/dtW;
         const dir=Math.sign(STATE.pointer.x-STATE._wPrev.x);
-        if(sp>1.1 && dir!==0 && STATE._wDir!==undefined && dir!==STATE._wDir) STATE._waveE=(STATE._waveE||0)+dtW*7.5;
-        else if(sp>2.1) STATE._waveE=(STATE._waveE||0)+dtW*2.0;
+        if(sp>1.5 && dir!==0 && STATE._wDir!==undefined && dir!==STATE._wDir) STATE._waveE=(STATE._waveE||0)+dtW*5.5;
+        else if(sp>2.8) STATE._waveE=(STATE._waveE||0)+dtW*1.4;
         if(dir!==0) STATE._wDir=dir;
       }
       STATE._wPrev={x:STATE.pointer.x,y:STATE.pointer.y,t:nowW};
     } else { STATE._wPrev=null; STATE._wDir=undefined; }
     // 能量衰减 + 触发
     STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.28);
-    if(STATE._waveE>=.32 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
+    if(STATE._waveE>=.55 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
        && (STATE.action==='idle'||STATE.action==='sit'||STATE.action==='notice')){
       STATE._waveE=0; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
       STATE.danceCool=3.0; noteAct('手舞足蹈');
@@ -3551,7 +3562,7 @@ boot();
   const FILES={knead:'knead.mp3',stretch:'stretch.mp3',dance:'dance.mp3',
                sniff:'sniff.mp3',step:'step.mp3',pounce:'pounce.mp3',
                heart:'heart.mp3',heartbeat:'heartbeat.mp3'};
-  const FILE_GAIN={knead:0.35,stretch:0.8,dance:1.0,sniff:0.5,step:0.2,pounce:1.0,heart:1.0,heartbeat:0.95};   // step -60%、stretch -20%、knead -50%
+  const FILE_GAIN={knead:0.105,stretch:0.8,dance:1.0,sniff:0.5,step:0.04,pounce:1.0,heart:1.0,heartbeat:0.95};   // step -60%、stretch -20%、knead -50%
   async function loadAll(){
     for(const k in FILES){
       const base=FILES[k].replace(/\.(mp3|m4a)$/,'');
@@ -3595,14 +3606,13 @@ boot();
       const t=now();
       if(act==='walkIn'&&ok('walk',400)){ walkT=0; }
       if(act==='stretch'&&ok('stretch',1200)){ if(!play('stretch',t+0.05)) S.stretch(t+0.05); }
-      if(act==='knead'&&ok('knead',900)){ kneadT=0; }
+      if(act==='knead'&&ok('knead',900)){ if(!play('knead',t+0.02)) S.knead(t+0.02); }
       if(act==='dance'&&ok('dance',1200)){ if(!play('dance',t)) S.dance(t); }
       // sniff 音效改为走到位后再播（见下方 actionT≥1.5s 的延迟触发）
       if(act==='pounce'&&ok('pounce',900)){ if(!play('pounce',t+0.05)) S.pounce(t+0.05); }
       last=act;
     }
     if(act==='walkIn'){ walkT-=dt; if(walkT<=0){ walkT=0.43; if(!play('step',now())) S.step(now()); } }   // 每两步落地播一次（与步态 4 拍/周期对齐）
-    if(act==='knead'){ kneadT-=dt; if(kneadT<=0){ kneadT=0.46; if(!play('knead',now())) S.knead(now()); } }
     // sniff：等猫咪走到镜头前（actionT≥1.5s）再播放嗅闻声
     if(act==='sniff'){
       if(STATE.actionT>=1.5 && !STATE._sniffPlayed){
@@ -3615,7 +3625,13 @@ boot();
   window.__sfxNote=function(name){
     if(!ready||!ac||ac.state!=='running') return;
     // 猫咪之吻改为播放心跳声（原亲吻喵叫已挪给爱心特效）
-    if(name==='猫咪之吻'&&ok('hb',1600)){ if(!play('heartbeat',now()+0.02)) S.kiss(now()+0.02); }
+    if(name==='猫咪之吻'&&ok('hb',1600)){
+      const t0=now()+0.02;
+      for(let i=0;i<2;i++){                       // 连响两下，形成"咚-咚 · 咚-咚"的心跳感
+        const at=t0+i*0.62;
+        if(!play('heartbeat',at)) S.kiss(at);
+      }
+    }
   };
   // 供特效模块调用：爱心触发音
   window.__sfxPlay=function(name){ if(!ready||!ac||ac.state!=='running') return false;
