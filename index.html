@@ -671,7 +671,7 @@ const smoothSt=x=>{ x=Math.max(0,Math.min(1,x)); return x*x*(3-2*x); };
 // 平滑"起-保持-收"包络：t0→t1 上升、t1→t2 保持、t2→t3 回落
 const plateauEnvelope=(t,t0,t1,t2,t3)=>smoothSt((t-t0)/(t1-t0))*(1-smoothSt((t-t2)/(t3-t2)));
 // 开场固定从正上方（x=0）直直走过来，不再随机三起点
-STATE.moveX=0; STATE.moveZ=FAR_Z;
+STATE.moveX=0; STATE.moveZ=-0.16;   // 初始更近：入场距离缩短约 45%
 // 进入主界面之前先在远处静立等待，不自动走；gate 关闭（摄像头/鼠标进入）后才触发 walkIn
 STATE.entered=false; STATE.action='idle'; STATE.actionT=0;
 
@@ -2302,7 +2302,7 @@ const D=.09*c + SITT.D*s;
   rig.root.rotation.y=GAIT.yaw+stYaw;
   // 扑玩时的侧倾：朝扑的方向压一下，读作"斜着扑出去"
   const pounceBank = act==='pounce' ? -(STATE.pounceTarget.x-.5)*.16*Math.min(1,at/.35)*(at>1.05?Math.max(0,1-(at-1.05)/.65):1) : 0;
-  rig.root.rotation.z=Math.sin(t*.55)*.016*sway + .010*Math.sin(GAIT.phi*Math.PI*2)*gw + GAIT.bank + pounceBank;
+  rig.root.rotation.z=Math.sin(t*.55)*.016*sway + .0045*Math.sin(GAIT.phi*Math.PI*2)*gw + GAIT.bank + pounceBank;   // 行走横滚减半
   // 呼吸时躯干随起伏轻微俯仰，配合胸腔起伏
   rig.root.rotation.x=Math.sin(t*.42)*.011*sway + STATE._breathPhase*.005 + stPitch;
 
