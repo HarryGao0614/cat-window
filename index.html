@@ -2066,7 +2066,7 @@ function updateActions(t, dt){
       const busy=STATE.pawLift.L>.05||STATE.pawLift.R>.05||STATE.mutual.active;
       if(STATE.actionCool<=0 && !busy){
         // 首轮：踩奶/抖毛/扑玩 —— 每个先各做两遍（且不连续重复），之后才转常规概率
-        const FRESH=['knead','shake','pounce','stretch'];
+        const FRESH=['knead','shake','stretch'];   // 扑玩不再进入自主动作
         STATE.seen=STATE.seen||{};
         const fire=(a)=>{
           if(a==='knead'){ STATE.action='knead'; STATE.actionT=0; }
@@ -2086,12 +2086,11 @@ function updateActions(t, dt){
           let pick=null;
           for(let tries=0;tries<8;tries++){
             const r=Math.random();
-            if(r<.20){ pick='stand'; break; }
-            else if(r<.40){ pick='sit'; break; }
-            else if(r<.58){ pick='knead'; break; }
-            else if(r<.76){ pick='shake'; break; }
-            else if(r<.92){ pick='stretch'; break; }
-            else { pick='pounce'; break; }
+            if(r<.23){ pick='stand'; break; }        // 站着发呆 23%
+            else if(r<.45){ pick='sit'; break; }     // 坐着 22%
+            else if(r<.65){ pick='knead'; break; }   // 踩奶 20%
+            else if(r<.85){ pick='shake'; break; }   // 抖毛 20%
+            else { pick='stretch'; break; }          // 伸懒腰 15%
           }
           if(pick==='stand'||pick===STATE._lastAuto){
             // 站着发呆 或 与上次重复 → 允许发呆（发呆本身不产生重复动作感）
