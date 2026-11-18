@@ -571,9 +571,9 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://fastly.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-    "three/addons/": "https://fastly.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
-    "@mediapipe/tasks-vision": "https://fastly.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
+    "three": "./cat_assets/vendor/three/build/three.module.js",
+    "three/addons/": "./cat_assets/vendor/three/examples/jsm/",
+    "@mediapipe/tasks-vision": "./cat_assets/vendor/tasks-vision/vision_bundle.mjs"
   }
 }
 </script>
@@ -2835,6 +2835,22 @@ function loop(){
     camera.lookAt(rig.camBase.lx, rig.camBase.ly, rig.camBase.lz);
   }
   renderer.render(scene, camera);
+
+  // ===== 自适应像素比：低帧率自动降分辨率，流畅回升（高端设备保持原清晰度）=====
+  {
+    const _now=performance.now();
+    if(!STATE._dprAcc){ STATE._dprAcc={t:_now,n:0,cur:Math.min(window.devicePixelRatio||1,2)}; }
+    const A=STATE._dprAcc; A.n++;
+    if(_now-A.t>1500){
+      const fps=A.n/((_now-A.t)/1000);
+      const levels=[1.0,1.25,1.5,1.75,2.0];
+      const cap=Math.min(window.devicePixelRatio||1,2);
+      let idx=levels.findIndex(v=>v>=A.cur-1e-3); if(idx<0) idx=levels.length-1;
+      if(fps<42 && idx>0){ idx--; renderer.setPixelRatio(Math.min(levels[idx],cap)); A.cur=Math.min(levels[idx],cap); }
+      else if(fps>56 && idx<levels.length-1){ idx++; renderer.setPixelRatio(Math.min(levels[idx],cap)); A.cur=Math.min(levels[idx],cap); }
+      A.t=_now; A.n=0;
+    }
+  }
 }
 
 /* ================= 自适应 ================= */
@@ -2917,7 +2933,7 @@ window._wandDiag=()=>({wx:_wx,wy:_wy,ang:_wAng,len:WAND_LEN,ptr:[STATE.pointer.x
 /* ================= MediaPipe 人脸与手势 ================= */
 import { FaceLandmarker, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
-const WASM_URL = 'https://fastly.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+const WASM_URL = './cat_assets/vendor/tasks-vision/wasm';
 // 模型加载：混合模式默认外置（./cat_models/*.task，运行时 fetch，head 里 preload 已让流水线打包）；
 // 把 INLINE_MODELS 置 true 并在 INLINE_MODEL_DATA 填回 base64（数据见 _backup），即可完全回到单文件。
 const INLINE_MODELS = false;
@@ -3256,6 +3272,9 @@ function detectLoop(){
   if(!video || video.readyState<2) return;
   if(video.currentTime===lastVideoTime) return;
   lastVideoTime = video.currentTime;
+  // 隔帧检测：渲染仍 60fps，识别降到约 30fps（手势/表情响应延迟仅 +16ms，省一半 CPU）
+  STATE._detTick=(STATE._detTick||0)+1;
+  if((STATE._detTick&1)===0) return;
   const nowMs=performance.now();
 
   // 人脸
@@ -3449,7 +3468,7 @@ syncModeUI();
 loop();   // 所有 const/状态声明完成后再启动渲染循环，避免 TDZ
 </script>
 <script type="module">
-import * as THREE from 'https://fastly.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+import * as THREE from './cat_assets/vendor/three/build/three.module.js';
 // 试验：胡须 + 肉垫（运行时挂载，参数已锁定）
 const W={dx:0,dy:0.62,dz:2.5,ang:12,len:4.3,n:6,rad:0.08,bend:1,roots:3};
 const FP={toesY:0.2,toesZ:-0.4,toesSpread:1,toesR:0.8,mainY:0.2,mainZ:0.2,mainR:0.8,toeDome:0.2,mainDome:0.4,
@@ -3460,7 +3479,7 @@ const hash=(k)=>{const v=Math.sin((k+1)*127.1+37.7)*43758.5453;return v-Math.flo
 function boot(){
   const rig=window.rig;
   if(!window.__CAT_READY||!rig||!rig.bones||!rig.bones.Bone004) return setTimeout(boot,200);
-  import('https://fastly.jsdelivr.net/npm/three@0.169.0/examples/jsm/utils/BufferGeometryUtils.js').then(BGU=>{
+  import('./cat_assets/vendor/three/examples/jsm/utils/BufferGeometryUtils.js').then(BGU=>{
     const toLocal=(bone,w)=>{bone.updateWorldMatrix(true,false);
       return w.clone().applyMatrix4(new THREE.Matrix4().copy(bone.matrixWorld).invert());};
     // 胡须
