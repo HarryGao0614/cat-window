@@ -395,10 +395,11 @@
     <span class="gt">互动指南</span><span class="gchev">▾</span>
   </div>
   <div id="guideBody">
-    <h4>语音（直接说话）</h4>
+    <h4>语音（按住空格说话）</h4>
     <ul>
-      <li><b>咪咪</b>：猫咪走过来看你</li>
-      <li><b>坐下</b>：猫咪乖乖坐下</li>
+      <li><b>咪咪</b>（小猫咪 / 小咪 / 喵 / 喵喵 / 猫猫）：猫咪凑近闻闻你</li>
+      <li><b>坐下</b>（坐 / 坐好 / 快坐下）：猫咪乖乖坐下</li>
+      <li><b>展示</b>（秀一下 / 跳一个 / 动一动 / 露一手 / 表演一个）：随机表演一个（伸懒腰 / 手舞足蹈 / 爱心）</li>
     </ul>
     <h4>看猫猫模式 · 人脸</h4>
     <ul>
@@ -3876,6 +3877,7 @@ boot();
     const [x,y]=mouthScreenPos(); heart.on=true; heart.t=0; heart.x0=x; heart.y0=y; parts.length=0;
     heart.path=Math.floor(Math.random()*4);      // 0 直线 / 1 S形 / 2 螺旋 / 3 高抛
   }
+  window.__fxHeart=fireHeart;                     // 供语音「展示」等外部触发
   function heartPath(ctx,x,y,s,rot){
     ctx.save(); ctx.translate(x,y); ctx.rotate(rot); ctx.scale(s/16,s/16);
     ctx.beginPath(); ctx.moveTo(0,4);
@@ -4225,6 +4227,8 @@ if(!_NO_MAT) applyTex();
   const INTENTS=[
     {id:'come', words:['咪咪','小猫咪','小咪','喵喵','喵','猫猫','咪咪呀','小猫咪咪'], desc:'走过来'},
     {id:'sit',  words:['坐下','坐好','快坐下','坐'],                               desc:'坐下'},
+    {id:'show', words:['展示','秀一下','秀一个','跳一个','跳支舞','动一动','露一手','表演一个','表演一下','来个绝活'],
+                desc:'随机表演'},
   ];
   const norm=t=>(t||'').replace(/[\s，。！？、,.!?~～·—…"“”'‘’]/g,'').toLowerCase();
   function match(text){
@@ -4255,6 +4259,25 @@ if(!_NO_MAT) applyTex();
       }
     } else if(it.id==='sit'){
       STATE.action='sit'; STATE.actionT=0; STATE.actionDur=3.4; STATE.actionCool=2.4;
+    } else if(it.id==='show'){
+      // 「展示」：随机秀一个 —— 伸懒腰 / 手舞足蹈 / 爱心（避开与上次相同）
+      const pool=['stretch','dance','heart'];
+      let pick=pool[(Math.random()*pool.length)|0];
+      if(pick===V._lastShow){ pick=pool[(pool.indexOf(pick)+1+((Math.random()*2)|0))%3]; }
+      V._lastShow=pick;
+      if(pick==='stretch'){
+        STATE.action='stretch'; STATE.actionT=0; STATE.actionCool=3.7;
+        STATE.stretchSide=Math.random()<.5?-1:1;
+        STATE._arcSign=STATE.stretchSide;
+        if(typeof noteAct==='function') noteAct('伸懒腰');
+      } else if(pick==='dance'){
+        STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
+        STATE._pawLiftTarget={L:0,R:0};
+        if(typeof noteAct==='function') noteAct('手舞足蹈');
+      } else {
+        if(window.__fxHeart){ try{ window.__fxHeart(); }catch(e){} }
+        if(typeof noteAct==='function') noteAct('爱心');
+      }
     }
     say('🐱 '+it.desc, 1800, '#c9e8a8');
   }
@@ -4317,7 +4340,7 @@ if(!_NO_MAT) applyTex();
   addEventListener('blur', ()=>{ if(held){ held=false; stopListen(); } });
 
   /* 进入主界面后提示一次 */
-  const hintOnce=()=>{ if(STATE.entered){ say('按住空格说话：「咪咪」走过来 /「坐下」坐下', 5000, '#e0a94b'); } };
+  const hintOnce=()=>{ if(STATE.entered){ say('按住空格说话：「咪咪」闻闻 /「坐下」坐下 /「展示」随机表演', 5000, '#e0a94b'); } };
   setInterval(hintOnce, 3000);
   console.log('[VOICE] PTT ready', {supported:V.supported});
 })();
