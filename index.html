@@ -683,7 +683,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.20;   // 光照调优：用户实测 1.20
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
 window.renderer=renderer;   // 调试钩子（工作记忆 §7 要求保留）
@@ -697,30 +697,40 @@ window.camera = camera;
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
 
-/* 光照：森系暖光主光 + 地面绿色反弹 + 柔和轮廓 */
-const key = new THREE.DirectionalLight(0xffe0b6, 1.5);
+/* 光照（2026-11-19 调优版）：主光 + 中性补光 + 关天光 + 暖轮廓光 + 面部补光 + 4096 阴影
+   参数来自用户实测：边缘发光 2.0 / 整体亮度 1.20 / 脸部亮度 0.80 / 色温中性偏暖
+   天光 0、环境光 0.30、环境贴图 0.35、阴影精度 4096 */
+const key = new THREE.DirectionalLight(0xf0e3d2, 1.5);
 key.position.set(-1.2, 1.7, -0.8);
 key.castShadow = true;
-key.shadow.mapSize.set(1024,1024);
+key.shadow.mapSize.set(4096,4096);
 key.shadow.camera.near=.1; key.shadow.camera.far=6;
 key.shadow.camera.left=-1.3; key.shadow.camera.right=1.3;
 key.shadow.camera.top=1.3; key.shadow.camera.bottom=-1.3;
 key.shadow.bias = -0.002;
 scene.add(key);
 
-const hemi = new THREE.HemisphereLight(0xfff0d6, 0x35502f, .75);
+const hemi = new THREE.HemisphereLight(0xfff0d6, 0x35502f, 0.24);   // 天光（用户实测 0.24：补暗部，脸不发黑）
 scene.add(hemi);
 
-const fill = new THREE.DirectionalLight(0xa8cfa0, .35);
+const fill = new THREE.DirectionalLight(0x8fa6c8, .18);            // 中性冷补光（原为绿色，压掉发绿灰）
 fill.position.set(1.0, .7, -0.5);
 scene.add(fill);
 
-const rim = new THREE.DirectionalLight(0xdcecc8, .7);
+const rim = new THREE.DirectionalLight(0xdcecc8, .30);             // 冷轮廓光减弱，避免与暖轮廓打架
 rim.position.set(.5, 1.1, 1.2);
 scene.add(rim);
 
-scene.add(new THREE.AmbientLight(0x2c382a, .45));
-scene.environmentIntensity=.4;
+// 暖轮廓光：每帧放在相机反方向，把猫从背景中"剥"出来（观感提升最大的一盏）
+const rimW = new THREE.DirectionalLight(0xe9d6bf, 2.0);
+scene.add(rimW);
+// 面部补光：每帧跟随相机上方，特写时脸不发黑
+const faceL = new THREE.DirectionalLight(0xfff2e0, 1.60);   // 面部补光（用户实测 1.60）
+scene.add(faceL);
+const CAT_C = new THREE.Vector3(0, .20, .14);   // 猫脸中心（暖轮廓/面部光的瞄准点）
+
+scene.add(new THREE.AmbientLight(0x2c382a, .36));
+scene.environmentIntensity=.35;
 scene.fog=new THREE.FogExp2(0x0a1626, .30);   // 深蓝夜空雾气
 
 /* 地面：承接阴影的暖暗垫面，不做镜面 */
@@ -1270,10 +1280,18 @@ function loadCat(b64){
       sh.uniforms.uLower={value:0};
       sh.uniforms.uLidTilt={value:0};   // 眼睑倾斜：眯/闭眼时内角低、外角高（倒八字）
       sh.uniforms.uGaze={value:new THREE.Vector2(0,0)};
+      // 好看度第2步：淡草绿 + 宝石光泽（用户实测参数）
+      sh.uniforms.uSatA={value:1.20};    // 绿色浓度
+      sh.uniforms.uBriA={value:1.06};    // 虹膜亮度
+      sh.uniforms.uGlossA={value:1.00};  // 宝石光泽
+      sh.uniforms.uRingA={value:0.26};   // 虹膜暗环
+      sh.uniforms.uLidA={value:0.42};    // 眼睑投影
+      sh.uniforms.uCatchA={value:2.00};  // 眼神光
+      sh.uniforms.uWetA={value:0.10};    // 边缘湿润
       sh.vertexShader='varying vec3 vEyeRel;\n'+sh.vertexShader
         .replace('#include <project_vertex>',
           '#include <project_vertex>\n vEyeRel=(modelViewMatrix*vec4(position,0.0)).xyz;');
-      sh.fragmentShader='uniform float uPupil; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform float uLidTilt; uniform vec2 uGaze;\n'
+      sh.fragmentShader='uniform float uPupil; uniform float uSatA; uniform float uBriA; uniform float uGlossA; uniform float uRingA; uniform float uLidA; uniform float uCatchA; uniform float uWetA; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform float uLidTilt; uniform vec2 uGaze;\n'
         +'varying vec3 vEyeRel;\n'
         +sh.fragmentShader
         .replace('#include <clipping_planes_fragment>',
@@ -1316,6 +1334,24 @@ function loadCat(b64){
         '  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.008,0.009,0.012),pm);\n'+
         '  float sd=length(vec2(x*1.1,y+0.075));\n'+
         '  pspot=(1.0-smoothstep(0.02,0.1,sd))*pm;\n'+
+        '  // ===== 淡草绿 + 宝石质感（第2步）=====\n'+
+        '  float lum=dot(diffuseColor.rgb,vec3(0.299,0.587,0.114));\n'+
+        '  diffuseColor.rgb=mix(vec3(lum),diffuseColor.rgb,uSatA);\n'+
+        '  diffuseColor.rgb=clamp(diffuseColor.rgb*uBriA,0.0,1.0);\n'+
+        '  diffuseColor.rgb*=vec3(0.985,1.015,1.0);\n'+
+        '  float rr=length(vec2(x,y))/max(uCapH,1e-4);\n'+
+        '  float ring=smoothstep(0.60,1.02,rr);\n'+
+        '  diffuseColor.rgb*=mix(1.0,0.55,ring*uRingA);\n'+
+        '  diffuseColor.rgb*=mix(1.0,0.80,smoothstep(0.0,0.16,pm));\n'+
+        '  {\n'+
+        '    vec2 relE=vEyeRel.xy-uGaze*0.0032;\n'+
+        '    float halfH=max(0.0,0.0044*(1.0-uSquint));\n'+
+        '    float nxE=clamp(abs(relE.x)/0.0085,0.0,1.0);\n'+
+        '    float arcE=sqrt(max(0.0,1.0-nxE*nxE));\n'+
+        '    float upperE=max(halfH*arcE,1e-5);\n'+
+        '    float lidT=clamp(relE.y/upperE,0.0,1.0);\n'+
+        '    diffuseColor.rgb*=mix(1.0,1.0-0.42*clamp(uLidA,0.0,1.0),pow(lidT,2.6));\n'+
+        '  }\n'+
         '}\n')
         .replace('#include <opaque_fragment>',
         '#include <opaque_fragment>\n'+
@@ -1330,6 +1366,17 @@ function loadCat(b64){
         '  float ndhd=max(dot(normal,gHd),0.0);\n'+
         '  gl_FragColor.rgb += vec3(0.95,0.97,1.0)*ndhd*pm*0.04;\n'+
         '  gl_FragColor.rgb += vec3(1.0,0.97,0.9)*pspot*1.0;\n'+
+        '  // 宽柔光泽（宝石"油润"感）\n'+
+        '  vec3 sL=normalize(vec3(-0.15,0.75,-0.64));\n'+
+        '  float sheen=pow(max(dot(normal,normalize(sL+gV)),0.0),22.0);\n'+
+        '  gl_FragColor.rgb+=vec3(1.0,1.0,0.97)*sheen*0.16*uGlossA;\n'+
+        '  // 锐利眼神光（一点就够）\n'+
+        '  vec3 cL=normalize(vec3(-0.40,0.62,-0.67));\n'+
+        '  float csp=pow(max(dot(normal,normalize(cL+gV)),0.0),1500.0);\n'+
+        '  gl_FragColor.rgb+=vec3(1.0,1.0,0.99)*csp*2.6*uCatchA;\n'+
+        '  // 边缘湿润：只比外圈，避免整体泛白\n'+
+        '  float edge=pow(1.0-max(dot(normal,gV),0.0),7.0);\n'+
+        '  gl_FragColor.rgb+=vec3(0.80,0.93,1.0)*edge*0.05*uWetA;\n'+
         '  float fres=pow(1.0-max(dot(normal,gV),0.0),4.0);\n'+
         '  gl_FragColor.rgb += vec3(0.82,0.88,1.0)*fres*0.04;\n'+
         '}\n');
@@ -2015,7 +2062,20 @@ function updateActions(t, dt){
         rig.bones.Bone004.getWorldPosition(_EY_TH);
         un.uLidTilt.value=(_EY_TP.x>_EY_TH.x?1:-1)*eyeClose;
         // 注视方向归一（与 yaw/pitch 同口径），驱动虹膜窗口平移
-        un.uGaze.value.set(THREE.MathUtils.clamp(yaw/.5,-1,1), THREE.MathUtils.clamp(pitch/.5,-1,1));
+        // 瞳孔呼吸（缓慢 0.016 幅度）+ 微扫视（每 0.7~2.6s 换一个很小目标）
+        STATE._eyeT=(STATE._eyeT||0)+dt;
+        const _sac=STATE._sac||(STATE._sac={x:0,y:0,tx:0,ty:0,next:0});
+        if(STATE._eyeT>_sac.next){
+          _sac.next=STATE._eyeT+0.7+Math.random()*1.9;
+          _sac.tx=(Math.random()*2-1)*0.050; _sac.ty=(Math.random()*2-1)*0.036;
+        }
+        const _k=Math.min(1,dt*6);
+        _sac.x+=(_sac.tx-_sac.x)*_k; _sac.y+=(_sac.ty-_sac.y)*_k;
+        un.uPupil.value=STATE.pupil+Math.sin(STATE._eyeT*1.7)*0.016;
+        un.uGaze.value.set(
+          THREE.MathUtils.clamp(yaw/.5,-1,1)+_sac.x*1.5,
+          THREE.MathUtils.clamp(pitch/.5,-1,1)+_sac.y*1.5
+        );
       }
     });
     // 眯眼：眼眶上下向中心线合拢成一条拉长的线（body 顶点形变）
@@ -2833,6 +2893,13 @@ function loop(){
     camera.position.z=rig.camBase.pz + .150*_st;
     camera.position.y=rig.camBase.py + .022*_st;
     camera.lookAt(rig.camBase.lx, rig.camBase.ly, rig.camBase.lz);
+  }
+  // ===== 光照跟随：暖轮廓光在相机反方向，面部补光在相机同侧上方 =====
+  {
+    const _d=camera.position.clone().sub(CAT_C).normalize();
+    rimW.position.copy(CAT_C).addScaledVector(_d,-0.85).add(new THREE.Vector3(0,.65,0));
+    const _cd=camera.position.clone().normalize();
+    faceL.position.copy(CAT_C).addScaledVector(_cd,0.9).add(new THREE.Vector3(0,.55,0));
   }
   renderer.render(scene, camera);
 
@@ -3792,6 +3859,217 @@ boot();
 
   // [已移除] 特效调试面板（模拟亲吻 / 直接测试爱心 / 模拟摄像头）：仅试验页保留
 })();
+</script>
+
+<script type="module">
+/* ===== 第3步·微动作（正式版，已合入主文件）=====
+   ① 快速双眨：75~100ms 两下，与互动的 1.4s 慢眨眼区分
+   ② 尾巴：世界 Z 轴大幅摆动 + 侧偏 + 抬尾（正面可见）
+   ③ 耳朵随机小抖 ④ 呼吸频率变化 ⑤ 待机重心微移 */
+const _leep=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{
+  let n=0; while(!window.__CAT_READY && n++<900) await _leep(100);
+  const M={freq:0.19, dbl:1.00, earFreq:0.80, brFreq:1.00, tail:2.00, sway:1.60};
+  let bodyMat=null; const eyeMats=[];
+  const findMats=()=>{
+    if(bodyMat && eyeMats.length) return;
+    scene.traverse(o=>{
+      const m=o.material; if(!m||Array.isArray(m)) return;
+      const sh=m.userData&&m.userData.shader; if(!sh||!sh.uniforms) return;
+      if(!bodyMat && 'uBlink' in sh.uniforms && 'uBlinkAmt' in sh.uniforms) bodyMat=m;
+      if('uSquint' in sh.uniforms && eyeMats.indexOf(m)<0) eyeMats.push(m);
+    });
+  };
+  const lerp=(a,b,k)=>a+(b-a)*k;
+  /* 快速双眨 */
+  const BL={next:0.8, acts:[], done:0};
+  function blinkTick(dt){
+    for(let i=BL.acts.length-1;i>=0;i--){ const a=BL.acts[i]; a.t+=dt; if(a.t>=a.dur) BL.acts.splice(i,1); }
+    BL.next-=dt;
+    if(BL.next<=0){
+      if(!(STATE.blink && STATE.blink.active)){
+        const dur=0.072+0.028*Math.random();
+        BL.acts.push({t:0,dur});
+        if(Math.random()<M.dbl) BL.acts.push({t:-(dur+0.052+Math.random()*0.045),dur});
+      }
+      BL.next=lerp(4.2,1.05,M.freq)*(0.78+Math.random()*0.44);
+    }
+    let c=0;
+    for(const a of BL.acts){ if(a.t>=0) c=Math.max(c,Math.sin(Math.PI*Math.min(1,a.t/a.dur))); }
+    return c;
+  }
+  /* 尾巴：世界 Z 轴摆动 + 侧偏 + 抬尾 */
+  let tailT=0;
+  const _q=new THREE.Quaternion(), _WZ=new THREE.Vector3(0,0,1), _WX=new THREE.Vector3(1,0,0);
+  const _QZ=new THREE.Quaternion(), _QX=new THREE.Quaternion();
+  function tailTick(dt){
+    tailT+=dt;
+    const k=M.tail, amp=0.105*k;
+    ['tail1','tail2','tail3','tail4','tail5'].forEach((bn,i)=>{
+      const b=rig.bones[bn]; if(!b) return;
+      const qb=rig.base[bn]; if(!qb) return;
+      const fall=1-i*0.05;
+      const ang=(amp*Math.sin(tailT*1.7-i*0.40)+0.045*k*fall)*fall;
+      _QZ.setFromAxisAngle(_WZ,ang);
+      _q.copy(qb).invert().multiply(_QZ).multiply(qb);
+      b.quaternion.multiply(_q);
+      const liftA=0.075*Math.min(k,2)*(i<2?1:0.4);
+      _QX.setFromAxisAngle(_WX,liftA);
+      _q.copy(qb).invert().multiply(_QX).multiply(qb);
+      b.quaternion.multiply(_q);
+    });
+  }
+  /* 耳朵小抖 */
+  const ER={cool:2,t:0,side:1,amp:0};
+  function earTick(dt){
+    ER.cool-=dt;
+    if(ER.t>0){ ER.t-=dt; }
+    else if(ER.cool<=0){ ER.t=0.22+Math.random()*0.18; ER.amp=0.55+Math.random()*0.45; ER.side=Math.random()<0.5?1:-1;
+      ER.cool=lerp(14,1.4,M.earFreq)*(0.7+Math.random()*0.7); }
+    const k=ER.t>0?Math.sin(Math.PI*Math.min(1,ER.t/0.36))*ER.amp:0;
+    const sh=bodyMat&&bodyMat.userData.shader; if(!sh) return;
+    const u=sh.uniforms, a=k*0.075;
+    if(u.uEarSplayL) u.uEarSplayL.value += (ER.side>0? a: a*0.3);
+    if(u.uEarSplayR) u.uEarSplayR.value += (ER.side<0? a: a*0.3);
+    if(u.uEarPitchL) u.uEarPitchL.value += k*0.05;
+    if(u.uEarPitchR) u.uEarPitchR.value += k*0.05;
+  }
+  /* 呼吸 */
+  let brT=0;
+  /* 重心微移 */
+  let swT=0;
+  let _last=performance.now();
+  const origRender=renderer.render.bind(renderer);
+  renderer.render=(s,c)=>{
+    const now=performance.now(); const dt=Math.min(0.25,(now-_last)/1000); _last=now;
+    findMats();
+    const close=blinkTick(dt);
+    if(close>0.001){
+      const bs=bodyMat&&bodyMat.userData.shader;
+      if(bs) bs.uniforms.uBlink.value=Math.max(bs.uniforms.uBlink.value,close);
+      eyeMats.forEach(m=>{ const u=m.userData.shader.uniforms;
+        if(u.uSquint) u.uSquint.value=Math.max(u.uSquint.value,close*0.92); });
+    }
+    earTick(dt); tailTick(dt);
+    brT+=dt; rig.root.rotation.x += Math.sin(brT*M.brFreq*Math.PI*2)*0.0065;
+    swT+=dt; rig.root.position.x += Math.sin(swT*0.55)*0.0022*M.sway;
+    rig.root.rotation.z += Math.sin(swT*0.42)*0.0035*M.sway;
+    origRender(s,c);
+  };
+  window.__MOTION_MAIN={M,blinks:()=>BL.done};
+})();
+</script>
+
+
+<script type="module">
+/* ===== 第4步·材质增强（固定参数，无面板）=====
+   法线细节 / 边缘绒毛 / 全身绒面 / 颗粒 / 饱和 / 暗部提亮 / 面部专项 / 各向异性16 */
+
+/* ===== 第4步·材质试验台（不改主文件）=====
+   ① Frensel 绒毛边缘（shader 注入，毛边会“透光”）
+   ② 毛发粗糙度（哑光 ↔ 微光泽）
+   ③ 环境反射强度
+   ④ 贴图各向异性过滤（锐化）===== */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let n=0; while(!window.__CAT_READY && n++<900) await sleep(100);
+await sleep(600);
+
+const P={on:true, fuzz:0.23, fur:0.20, grain:0.25, rough:0.91, env:0.80, aniso:16, sat:1.28, bump:0.80, lift:0.38, face:0.32};
+
+let bodyMat=null;
+const findBody=()=>{
+  if(bodyMat) return true;
+  scene.traverse(o=>{
+    const m=o.material; if(bodyMat||!m||Array.isArray(m)) return;
+    const sh=m.userData&&m.userData.shader;
+    if(sh&&sh.uniforms&&'uBlink' in sh.uniforms&&'uBlinkAmt' in sh.uniforms) bodyMat=m;
+  });
+  return !!bodyMat;
+};
+let tries=0;
+while(!findBody() && tries++<300) await sleep(100);
+
+let uFuzz=null,uFur=null,uGrain=null,uSat=null,uBump=null,uLift=null,uFace=null,uHeadP=null;
+if(bodyMat){
+  const origOBC=bodyMat.onBeforeCompile;
+  bodyMat.onBeforeCompile=(sh,rr)=>{
+    try{ origOBC.call(bodyMat,sh,rr); }catch(e){}
+    sh.uniforms.uFuzzA={value:P.fuzz};
+    sh.uniforms.uFurA={value:P.fur};
+    sh.uniforms.uGrainA={value:P.grain};
+    sh.uniforms.uSatA2={value:P.sat};
+    sh.uniforms.uHeadP={value:new THREE.Vector3(0,0.22,0.2)};
+    sh.uniforms.uBumpA={value:P.bump};
+    sh.uniforms.uLiftA={value:P.lift};
+    sh.uniforms.uFaceA={value:P.face};
+    sh.vertexShader='varying vec3 vWorldPos;\n'+sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWorldPos=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader='varying vec3 vWorldPos;\nuniform float uFuzzA,uFurA,uGrainA,uSatA2,uBumpA,uLiftA,uFaceA;\nuniform vec3 uHeadP;\n'+sh.fragmentShader;
+    // ④ 法线细节：用高频噪声轻微扰动法线，产生毛发/皮肤的微小起伏
+    sh.fragmentShader=sh.fragmentShader.replace('#include <normal_fragment_maps>',
+`#include <normal_fragment_maps>
+{
+  float _n1=fract(sin(dot(vViewPosition*91.7+normal*3.1,vec3(12.9898,78.233,37.719)))*43758.5453);
+  float _n2=fract(sin(dot(vViewPosition*57.3-normal*2.7,vec3(39.34,11.13,83.15)))*43758.5453);
+  normal=normalize(normal+vec3(_n1-0.5,_n2-0.5,(_n1*_n2)-0.25)*uBumpA*0.9);
+}`);
+    sh.fragmentShader=sh.fragmentShader.replace('#include <dithering_fragment>',
+`{
+  vec3 _Vv=normalize(vViewPosition);
+  float _ndv=clamp(abs(dot(normalize(normal),_Vv)),0.0,1.0);
+  // 细颗粒噪声（屏幕/视图空间，毛绒颗粒感）
+  float _h= fract(sin(dot(_Vv*vec3(151.7,233.1,197.3)+normal*7.0, vec3(12.9898,78.233,37.719)))*43758.5453);
+  // ① 边缘绒毛：逆光时轮廓透光
+  float _fres=pow(1.0-_ndv,2.6);
+  gl_FragColor.rgb += vec3(1.0,0.93,0.82)*_fres*uFuzzA;
+  // ② 全身绒毛：柔和的绒面光泽 + 噪声调制（不是只有轮廓）
+  float _soft=pow(1.0-_ndv,1.35)*mix(0.55,1.35,_h);
+  gl_FragColor.rgb += vec3(1.0,0.95,0.88)*_soft*uFurA;
+  // ③ 毛绒颗粒
+  gl_FragColor.rgb *= (1.0+(_h-0.5)*uGrainA*0.35);
+  // ④ 毛色饱和度
+  float _lum=dot(gl_FragColor.rgb, vec3(0.2126,0.7152,0.0722));
+  gl_FragColor.rgb = mix(vec3(_lum), gl_FragColor.rgb, uSatA2);
+  // ⑤ 暗部提亮（把贴图烘焙进去的阴影“抬起来”，解决脸部发黑/色差）
+  gl_FragColor.rgb = pow(max(gl_FragColor.rgb, vec3(0.0035)), vec3(1.0 - uLiftA*0.55));
+  // ⑥ 面部专项：以头部骨骼为中心的球形遮罩，gamma 提亮（保留纹理层次）
+  float _faceMask = 1.0 - smoothstep(0.055, 0.105, distance(vWorldPos, uHeadP));
+  gl_FragColor.rgb = pow(gl_FragColor.rgb, vec3(1.0 - uFaceA*0.40*_faceMask));
+}
+#include <dithering_fragment>`);
+    uFuzz=sh.uniforms.uFuzzA;
+    uFur=sh.uniforms.uFurA; uGrain=sh.uniforms.uGrainA; uSat=sh.uniforms.uSatA2; uLift=sh.uniforms.uLiftA; uFace=sh.uniforms.uFaceA; uHeadP=sh.uniforms.uHeadP;
+  };
+  bodyMat.needsUpdate=true;
+}
+function applyTex(){
+  if(!bodyMat) return;
+  bodyMat.roughness=P.rough;
+  bodyMat.envMapIntensity=P.env;
+  ['map','roughnessMap','normalMap','metalnessMap','aoMap'].forEach(k=>{
+    const t=bodyMat[k]; if(t){ t.anisotropy=P.aniso; t.needsUpdate=true; }
+  });
+  bodyMat.needsUpdate=true;
+  if(uFuzz) uFuzz.value=P.fuzz;
+  if(uFur) uFur.value=P.fur;
+  if(uGrain) uGrain.value=P.grain;
+  if(uSat) uSat.value=P.sat;
+  if(uBump) uBump.value=P.bump;
+  if(uLift) uLift.value=P.lift;
+  if(uFace) uFace.value=P.face;
+  if(uHeadP&&rig&&rig.bones&&rig.bones.Bone004){ rig.bones.Bone004.getWorldPosition(uHeadP.value); }
+}
+
+/* 每帧更新头部世界坐标（面部提亮遮罩用） */
+if(uHeadP){
+  const _origRender=renderer.render.bind(renderer);
+  renderer.render=(s,c)=>{
+    if(window.rig&&window.rig.bones&&window.rig.bones.Bone004){
+      window.rig.bones.Bone004.getWorldPosition(uHeadP.value);
+    }
+    _origRender(s,c);
+  };
+}
+applyTex();
 </script>
 </body>
 </html>
