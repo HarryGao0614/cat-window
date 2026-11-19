@@ -3558,10 +3558,13 @@ startBtn.addEventListener('click', async ()=>{
   camErrEl.classList.remove('show');
   CatAudio.unlock();                    // 手势内尽早解锁音频，避免 await 后手势过期
 
-  // ① 同一次点击里初始化离线语音（申请麦克风 + 后台加载 Vosk 模型，约 43MB，仅首次）
-  if(window.__VOICE && window.__VOICE.prepare){
-    window.__VOICE.prepare().catch(e=>console.warn('离线语音初始化失败', e));
-  }
+  // ① 同一次点击里预先申请麦克风权限（语音改成"按住空格说话"，不再常驻）
+  try{
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      const st=await navigator.mediaDevices.getUserMedia({audio:true});
+      st.getTracks().forEach(t=>t.stop());          // 只为拿权限，立刻释放
+    }
+  }catch(e){ console.warn('麦克风权限未授权', e); }
 
   let loadTimer=null;
   try{
@@ -4196,155 +4199,121 @@ if(uHeadP && !_NO_MAT){
 }
 if(!_NO_MAT) applyTex();
 </script>
-<script src="./vendor/vosk/vosk.js"></script>
 <script type="module">
-/* ===== 语音互动（离线版 · 按住空格说话）：Vosk 本地识别，完全离线 ===== */
+/* ===== 语音互动（按住空格说话版）：说「咪咪」走过来、说「坐下」坐下 ===== */
 (function(){
-  const V={supported:true, listening:false, loading:false, ready:false, lastText:'', lastIntent:'', log:[], failed:null};
+  const V={supported:!!(window.SpeechRecognition||window.webkitSpeechRecognition), listening:false, lastText:'', lastIntent:'', log:[], failed:null};
   window.__VOICE=V;
-  const MODEL_URL='./vosk_model/model.tar.gz';
 
-  /* ---------- HUD ---------- */
+  /* HUD */
   const hud=document.createElement('div');
   hud.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:9px;'
-    +'padding:8px 15px;border-radius:999px;background:rgba(18,20,26,.86);border:1px solid rgba(230,190,120,.28);'
-    +'color:#f3e6cf;font:13px/1.4 -apple-system,"PingFang SC",sans-serif;opacity:0;transition:opacity .22s;pointer-events:none';
-  hud.innerHTML='<span id="vDot" style="width:8px;height:8px;border-radius:50%;background:#e0a94b"></span><span id="vTxt"></span>';
+    +'padding:8px 15px;border-radius:999px;background:rgba(18,20,26,.82);border:1px solid rgba(230,190,120,.28);'
+    +'color:#f3e6cf;font:13px/1.4 -apple-system,"PingFang SC",sans-serif;backdrop-filter:blur(6px);opacity:0;transition:opacity .22s;pointer-events:none';
+  hud.innerHTML='<span id="vDot" style="width:8px;height:8px;border-radius:50%;background:#7fd8a0;box-shadow:0 0 8px #7fd8a0"></span><span id="vTxt"></span>';
   document.body.appendChild(hud);
   const vTxt=hud.querySelector('#vTxt'), vDot=hud.querySelector('#vDot');
   let hudTimer=0;
-  function say(msg, ms=2400, color='#e0a94b', sticky=false){
+  function say(msg, ms=2200, color='#e0a94b', sticky=false){
     vTxt.textContent=msg; vDot.style.background=color; vDot.style.boxShadow='0 0 8px '+color;
     hud.style.opacity='1'; clearTimeout(hudTimer);
     if(!sticky && ms>0) hudTimer=setTimeout(()=>{ hud.style.opacity='0'; }, ms);
   }
   V.say=say;
 
-  /* ---------- 意图 ---------- */
+  /* 意图 + 同义词（长句包含也命中，取最长匹配） */
   const INTENTS=[
-    {id:'come', words:['咪咪','小猫咪','小咪','喵喵','喵','猫猫'], desc:'走过来'},
-    {id:'sit',  words:['坐下','坐好','坐'],                        desc:'坐下'},
+    {id:'come', words:['咪咪','小猫咪','小咪','喵喵','喵','猫猫','咪咪呀','小猫咪咪'], desc:'走过来'},
+    {id:'sit',  words:['坐下','坐好','快坐下','坐'],                               desc:'坐下'},
   ];
   const norm=t=>(t||'').replace(/[\s，。！？、,.!?~～·—…"“”'‘’]/g,'').toLowerCase();
   function match(text){
     const n=norm(text); if(!n) return null;
     let hit=null, len=0;
-    for(const it of INTENTS) for(const w of it.words){ if(n.includes(w)&&w.length>len){ hit=it; len=w.length; } }
+    for(const it of INTENTS) for(const w of it.words){
+      if(n.includes(w) && w.length>len){ hit=it; len=w.length; }
+    }
     return hit;
   }
+
   const cool={};
   function fire(it){
     const now=performance.now()/1000;
     if(cool[it.id] && now-cool[it.id]<2.6) return;
-    cool[it.id]=now; V.lastIntent=it.id; V.log.push({t:+now.toFixed(1),id:it.id});
+    cool[it.id]=now;
+    V.lastIntent=it.id; V.log.push({t:+now.toFixed(1), id:it.id});
     if(it.id==='come'){
       if(!STATE.entered && window.__enterMain) window.__enterMain();
       else if(STATE.top!=='engaged'){ STATE.top='engaged'; STATE.hasJoined=false; STATE.action='walkIn'; STATE.actionT=0; }
       else { STATE.action='notice'; STATE.actionT=0; STATE.noticeT=0; STATE.moveZ+=(0.115-STATE.moveZ)*0.35; }
       STATE.actionCool=1.4;
-    } else {
+    } else if(it.id==='sit'){
       STATE.action='sit'; STATE.actionT=0; STATE.actionDur=3.4; STATE.actionCool=2.4;
     }
     say('🐱 '+it.desc, 1800, '#c9e8a8');
   }
-  V.fire=t=>{ const it=match(t); if(it) fire(it); return it?it.id:null; };
+  V.fire=(t)=>{ const it=match(t); if(it) fire(it); return it?it.id:null; };
   V.match=match;
 
-  /* ---------- 模型 / 麦克风 ---------- */
-  let model=null, rec=null, ctx=null, node=null, src=null, stream=null;
-  let armed=false, held=false, lastPartial='';
-
-  async function ensureModel(){
-    if(model || V.loading) return;
-    if(typeof Vosk==='undefined'){
-      V.failed='lib';
-      say('离线语音组件没加载到（vendor/vosk/vosk.js 缺失或没上传）', 9000, '#e07070');
-      throw new Error('Vosk 未加载');
-    }
-    V.loading=true;
-    say('正在加载离线语音模型（约 43MB，仅首次）…', 0, '#e0a94b', true);
-    const t0=performance.now();
+  /* 按住空格说话：keydown 开始，keyup 结束 */
+  let rec=null;
+  function startListen(){
+    if(V.listening) return;
+    if(!V.supported){ say('当前浏览器不支持语音识别，可用 Edge / Chrome', 4000, '#e07070'); return; }
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     try{
-      model=await Vosk.createModel(MODEL_URL);
-    }catch(err){
-      V.loading=false; V.failed='model';
-      say('识别模型加载失败：检查 vosk_model/model.tar.gz 是否上传', 9000, '#e07070');
-      throw err;
-    }
-    rec=new model.KaldiRecognizer();
-    rec.on('result',(m)=>{
-      const t=(m.result && m.result.text)||''; V.lastText=t; lastPartial='';
-      if(!held) return;
-      const it=match(t);
-      if(it) fire(it); else if(t) say('没听清：'+t, 1800, '#e0a94b');
-    });
-    rec.on('partialresult',(m)=>{
-      const t=(m.result && m.result.partial)||''; if(t) lastPartial=t;
-    });
-    V.loading=false; V.ready=true;
-    say('离线语音就绪（'+(Math.round((performance.now()-t0)/100)/10)+'s）· 按住空格说话', 3200, '#7fd8a0');
-  }
-
-  async function ensureAudio(){
-    if(ctx && stream && stream.active) return;
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      V.failed='mic'; say('这个浏览器不支持麦克风，请用 Chrome / Edge', 8000, '#e07070'); throw new Error('no getUserMedia');
-    }
-    try{
-      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
-    }catch(err){
-      V.failed='mic';
-      say('麦克风被拒绝：点地址栏左侧的麦克风图标允许后刷新', 9000, '#e07070');
-      throw err;
-    }
-    ctx=new AudioContext({sampleRate:16000});
-    node=ctx.createScriptProcessor(4096,1,1);
-    node.onaudioprocess=(e)=>{ if(!rec || !held) return; try{ rec.acceptWaveform(e.inputBuffer); }catch(err){} };
-    src=ctx.createMediaStreamSource(stream);
-    src.connect(node); node.connect(ctx.destination);
-  }
-
-  /* 入口点击时调用：预加载模型 + 申请麦克风（同一次点击手势内） */
-  async function prepare(){
-    try{
-      await ensureModel();
-      await ensureAudio();
-      say('🎙 按住空格说话：说「咪咪」或「坐下」', 4000, '#7fd8a0');
-      return true;
-    }catch(e){ return false; }
-  }
-  V.prepare=prepare;
-
-  async function startListen(){
-    if(armed) return;
-    if(!V.ready){ say(V.loading?'语音还在加载，稍等一下…':'语音未就绪：先点一次「进入猫窝」', 2600, '#e0a94b'); return; }
-    try{ await ensureAudio(); }catch(e){ return; }
-    armed=true; held=true; lastPartial='';
-    V.listening=true; say('🎙 正在听… 说完松开空格', 0, '#7fd8a0', true);
+      rec=new SR();
+      rec.lang='zh-CN'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=3;
+      rec.onstart=()=>{ V.listening=true; say('🎙 正在听… 说完松开空格', 0, '#7fd8a0', true); };
+      rec.onresult=(e)=>{
+        let best='';
+        for(let i=e.resultIndex;i<e.results.length;i++){
+          const r=e.results[i];
+          for(let k=0;k<r.length;k++){ const t=r[k].transcript.trim(); if(t.length>=best.length) best=t; }
+        }
+        V.lastText=best;
+        const it=match(best);
+        if(it) fire(it);
+        else say('没听清：'+(best||'—')+'，再试一次', 1800, '#e0a94b');
+      };
+      rec.onerror=(e)=>{
+        if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+          V.failed='mic'; say('麦克风没权限：点地址栏左侧麦克风图标允许后刷新', 5000, '#e07070');
+        } else if(e.error==='network'){
+          V.failed='network'; say('识别服务连不上（Chrome 语音依赖 Google）→ 已准备离线版', 6000, '#e07070');
+        } else if(e.error==='no-speech'){
+          say('没听到声音，再说一次', 1600, '#e0a94b');
+        }
+      };
+      rec.onend=()=>{ V.listening=false; if(hud.style.opacity==='1' && vTxt.textContent.indexOf('正在听')>=0) say('按住空格说话', 1400, '#e0a94b'); };
+      rec.start();
+    }catch(e){ V.listening=false; say('启动失败：'+e.message, 3000, '#e07070'); }
   }
   function stopListen(){
-    if(!held) return;
-    held=false;
-    if(rec){
-      try{ rec.retractPartial(); }catch(e){}
-      // 有些短句不会触发 result：用一个空缓冲收尾后再用 partial 兜底匹配
-      try{ rec.acceptWaveform(new AudioBuffer({length:1,numberOfChannels:1,sampleRate:16000})); }catch(e){}
-    }
-    if(lastPartial){ const it=match(lastPartial); if(it) fire(it); lastPartial=''; }
-    if(armed){ armed=false; V.listening=false; say('按住空格说话', 1600, '#e0a94b'); }
+    if(rec){ try{ rec.stop(); }catch(e){} }
+    V.listening=false;
   }
   V.start=startListen; V.stop=stopListen;
 
+  /* 空格键：按住说话；输入框里不拦截 */
+  let held=false;
   addEventListener('keydown', e=>{
     if(e.code!=='Space' || e.repeat) return;
-    const t=e.target; if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+    const t=e.target;
+    if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
     if(!STATE.entered) return;
-    e.preventDefault(); startListen();
+    e.preventDefault(); held=true; startListen();
   }, {passive:false});
-  addEventListener('keyup', e=>{ if(e.code!=='Space' || !held) return; e.preventDefault(); stopListen(); }, {passive:false});
-  addEventListener('blur', ()=>{ if(held) stopListen(); });
+  addEventListener('keyup', e=>{
+    if(e.code!=='Space' || !held) return;
+    held=false; e.preventDefault(); stopListen();
+  }, {passive:false});
+  addEventListener('blur', ()=>{ if(held){ held=false; stopListen(); } });
 
-  console.log('[VOICE-OFFLINE] module ready, Vosk='+(typeof Vosk));
+  /* 进入主界面后提示一次 */
+  const hintOnce=()=>{ if(STATE.entered){ say('按住空格说话：「咪咪」走过来 /「坐下」坐下', 5000, '#e0a94b'); } };
+  setInterval(hintOnce, 3000);
+  console.log('[VOICE] PTT ready', {supported:V.supported});
 })();
 </script>
 
