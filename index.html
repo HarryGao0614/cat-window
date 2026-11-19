@@ -2034,62 +2034,69 @@ function updateActions(t, dt){
   if(rig.eyePivots){
     const yaw=(STATE.target.x-.5)*1.15;
     const pitch=(.5-STATE.target.y)*.85;   // 世界轴旋转：屏幕上方目标→负角抬眼（视觉真值确认，反向会让瞳孔位移上下颠倒）
-    // 瞳孔放大：警觉/蹲伏/惊讶/扑玩时放大，放松收细；保留基线 .12，无人时也不至于细成空洞
+    // 视线：对视/亲吻时收回正前方（瞳孔居中，产生对视感）
+    const _kissNow=STATE.kiss && (STATE.kiss.active || (STATE.kiss.gaze||0)>0.25);
+    const _wantCenter=!!(mutual || _kissNow);
+    STATE._gazeC=damp(STATE._gazeC||0, _wantCenter?1:0, 7.5, dt);
+    const _gc=STATE._gazeC||0;
+    const clampA=(v,a)=>Math.max(-a,Math.min(a,v));
+    const yawC=clampA(yaw*(1-_gc*0.98), 0.30), pitchC=clampA(pitch*(1-_gc*0.98), 0.20);
+    // 瞳孔放大：警觉/蹲伏/惊讶/扑玩时放大，放松收细
     const pupilRaw=Math.min(1,STATE.moodBlend*.7*(1-STATE.enjoy*.8)+STATE.crouchAmt*.5
       +STATE.startle*.9*(1-STATE.enjoy)+(STATE.action==='pounce'?.6:0)+STATE.happy*.25);
-    let pupilTarget=Math.max(.17,pupilRaw-STATE.enjoy*.08);     // 下限 .12→.17：人离开后缩小幅度减弱约 40%
+    let pupilTarget=Math.max(.17,pupilRaw-STATE.enjoy*.08);
+    pupilTarget=pupilTarget*.80+.16;                            // 基准放大：正常状态瞳孔更圆一些
     // 抚摸镜头 / 检测不到人脸时：瞳孔应当放大（放松、好奇），而不是缩小
     const petNow=Math.max(STATE.enjoy||0, STATE._handCover?1:0);
     const faceLost=(STATE.inputMode==='camera') && !(STATE.face && STATE.face.active);
     const dilate=Math.max(petNow, faceLost?0.75:0);
-    pupilTarget=pupilTarget*.80+.16;                                   // 基准放大：正常状态瞳孔更圆
-    if(dilate>0.05) pupilTarget=Math.max(pupilTarget*(1+0.35*dilate), .40+.55*dilate);   // 抚摸/无人脸：等比例再放大
+    if(dilate>0.05) pupilTarget=Math.max(pupilTarget*(1+0.35*dilate), .40+.55*dilate);
     pupilTarget=Math.min(.95,pupilTarget);
     STATE.pupil=damp(STATE.pupil,pupilTarget,9,dt);
-    // 眼球转角按世界（屏幕）轴施加：pivot 挂在倾斜的 Bone004 下，直接用本地 Euler 会沿脊柱斜轴
-    // 转动、水平扫视变成圆锥摆动；这里把世界轴 yaw/pitch 共轭进头部本地坐标系，方向与屏幕一致
+    // 眼球转角按世界（屏幕）轴施加（pivot 挂在倾斜的 Bone004 下，用本地 Euler 会沿脊柱斜轴转）
     rig.eyePivots.forEach(e=>{
-      const _EY_QR=rig.eyePivots._qr||(rig.eyePivots._qr=new THREE.Quaternion());
-      const _EY_M4=rig.eyePivots._m4||(rig.eyePivots._m4=new THREE.Matrix4());
       rig.bones.Bone004.getWorldQuaternion(_EY_QH);
-      _EY_QY.setFromAxisAngle(_AX_Y,yaw);
-      _EY_QP.setFromAxisAngle(_AX_X,THREE.MathUtils.clamp(pitch,-0.13,0.07));   // 限角：上 7.5° / 下 4°
+      // 眼球本体跟随注视方向转动（上下都转）——眼皮不在眼球上，不会跟着翻
+      // 交互状态额外上转 ~5°，让瞳孔落在眼眶正中（对视感）
+      const _inter=(mutual || STATE.top==='engaged' || _kissNow) ? 0.087 : 0;
+      const _eyeAng = THREE.MathUtils.clamp(-pitchC*0.75, -0.13, 0.07) - _inter;   // 负=向上转
+      _EY_QP.setFromAxisAngle(_AX_X,_eyeAng);
+      _EY_QY.setFromAxisAngle(_AX_Y,yawC*0.35);    // 仅保留 35% 水平本体转动，增加立体感
       _EY_DQ.copy(_EY_QY).multiply(_EY_QP);
       e.pivot.quaternion.copy(_EY_QH).invert().multiply(_EY_DQ).multiply(_EY_QH);
-      _EY_QR.copy(e.pivot.quaternion).invert();
-      _EY_M4.makeRotationFromQuaternion(_EY_QR);
+      // 眼皮遮罩：逆旋转矩阵让眼皮锁在头坐标系（不随眼球转）
+      const _qr=e._qr||(e._qr=new THREE.Quaternion()), _m4=e._m4||(e._m4=new THREE.Matrix4());
+      _qr.copy(e.pivot.quaternion).invert();
+      _m4.makeRotationFromQuaternion(_qr);
       // 闭眼时把眼球轻微缩小并后移：避免闭眼后眼角露出虹膜的一小条（穿帮）
       const _shut=Math.max(0,Math.min(1,(eyeClose-.55)/.45));
-      const _es=1-.16*_shut;
-      e.pivot.scale.setScalar(_es);
+      e.pivot.scale.setScalar(1-.16*_shut);
       e.group.position.z=-.0016*_shut;
-      // 瞳孔 uniform：长在虹膜上
       const iris=e.group.children[0];
       if(iris.material.userData.shader){
         const un=iris.material.userData.shader.uniforms;
-        un.uEyeQR.value.setFromMatrix4(_EY_M4);   // 眼皮遮罩锁头部
-        un.uLidK.value=1.9;                       // 下眼皮高度（取巧档）
+        un.uEyeQR.value.setFromMatrix4(_m4);   // 眼皮遮罩锁头部
+        un.uLidK.value=1.9;                    // 下眼皮高度（取巧档：1=原值）
         un.uPupil.value=STATE.pupil;
         un.uSquint.value=eyeClose;
         un.uLower.value=STATE._lowerOpen;
-        // 内眼角朝头中心：屏幕右侧的眼，内角在 -x，因此倾斜符号取"眼相对头的位置"同号
         e.group.getWorldPosition(_EY_TP);
         rig.bones.Bone004.getWorldPosition(_EY_TH);
         un.uLidTilt.value=(_EY_TP.x>_EY_TH.x?1:-1)*eyeClose;
-        // 注视方向归一（与 yaw/pitch 同口径），驱动虹膜窗口平移
-        // 瞳孔呼吸（缓慢 0.016 幅度）+ 微扫视（每 0.7~2.6s 换一个很小目标）
+        // 瞳孔呼吸 + 微扫视
         STATE._eyeT=(STATE._eyeT||0)+dt;
         const _sac=STATE._sac||(STATE._sac={x:0,y:0,tx:0,ty:0,next:0});
         if(STATE._eyeT>_sac.next){
           _sac.next=STATE._eyeT+0.7+Math.random()*1.9;
           _sac.tx=(Math.random()*2-1)*0.050; _sac.ty=(Math.random()*2-1)*0.036;
         }
-        const _k=Math.min(1,dt*6);
-        _sac.x+=(_sac.tx-_sac.x)*_k; _sac.y+=(_sac.ty-_sac.y)*_k;
+        const _k2=Math.min(1,dt*6);
+        _sac.x+=(_sac.tx-_sac.x)*_k2; _sac.y+=(_sac.ty-_sac.y)*_k2;
         un.uPupil.value=STATE.pupil+Math.sin(STATE._eyeT*1.7)*0.016;
+        const _gy=THREE.MathUtils.clamp(pitchC/.5,-1,1);
         un.uGaze.value.set(
-          THREE.MathUtils.clamp(yaw/.5,-1,1)+_sac.x*1.5,
-          THREE.MathUtils.clamp(pitch/.5,-1,1)+_sac.y*1.5
+          THREE.MathUtils.clamp(yawC/.5,-1,1)+_sac.x*1.5*(1-_gc),
+          (_gy>0? _gy*0.85 : _gy) + _sac.y*1.5*(1-_gc)
         );
       }
     });
