@@ -657,7 +657,7 @@ window.STATE = STATE;
 
 // 两状态机参数：树洞内远处位 FAR_Z → 屏幕前定点 JOIN_Z，沿直线走过去（x 恒 0）
 const FAR_Z=-.4, JOIN_Z=.138, WALK_SPD=.108;
-const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=3.10, SNIFF_HOLD=3.0, SNIFF_BACK=2.5;    // 走近更慢；嗅闻 +1s（节奏不变）   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
+const SNIFF_Z=JOIN_Z+.17, SNIFF_WALK=3.10, SNIFF_HOLD=1.7, SNIFF_BACK=2.1;    // 走近更慢；嗅闻 +1s（节奏不变）   // 微笑→走近闻一闻  // 定点再前移 15%（.12→.138）；走出速度 +20%（.045→.054）
 const SESS_MAX=25;
 const DANCE_DUR=4.8;   // 手舞足蹈时长（连续三次点头触发）                            // 互动满 20s 进冷却；冷却时长触发时随机 2~4s
 const ST_DUR=3.7;                             // 伸懒腰总时长（按参考视频实测 3.4-3.8s）
@@ -672,9 +672,9 @@ STATE.entered=false; STATE.action='idle'; STATE.actionT=0;
 /* ================= Three 基础 ================= */
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = false;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.20;   // 光照调优：用户实测 1.20
@@ -696,7 +696,7 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), .04).texture;
    天光 0、环境光 0.30、环境贴图 0.35、阴影精度 4096 */
 const key = new THREE.DirectionalLight(0xf0e3d2, 1.5);
 key.position.set(-1.2, 1.7, -0.8);
-key.castShadow = true;
+key.castShadow = false;   // 性能：夜景阴影几乎不可见，关掉实时阴影
 key.shadow.mapSize.set(1536,1536);
 key.shadow.camera.near=.1; key.shadow.camera.far=6;
 key.shadow.camera.left=-1.3; key.shadow.camera.right=1.3;
@@ -1770,6 +1770,7 @@ function updateActions(t, dt){
     && !(STATE.face && STATE.face.active)
     && Math.abs(STATE.hand.x-.5)<.4 && STATE.hand.y<.7;
   STATE.enjoy=damp(STATE.enjoy, (handCover && STATE.top==='engaged')?1:0, 4, dt);
+  STATE._handCover=handCover;      // 供瞳孔/运镜复用
   // ===== 对视（仅摄像头）：放宽中心盒、缩短进入时间以提高触发灵敏度；离开保留迟滞防抖动 =====
   const M=STATE.mutual;
   const lookingAtCat = rawHas && Math.abs(tx-.5)<=.32 && Math.abs(ty-.5)<=.34;
@@ -1963,9 +1964,9 @@ function updateActions(t, dt){
   const _f=STATE.face;
   if(_f && _f.active && (_f.smile||0)>SMILE_THRESH) STATE._smileT=(STATE._smileT||0)+dt;
   else STATE._smileT=0;
-  if(STATE._smileT>.35 && STATE.sniffCool<=0 && STATE.top==='engaged'
+  if(STATE._smileT>.28 && STATE.sniffCool<=0 && STATE.top==='engaged'
      && STATE.action==='idle' && STATE.hasJoined){
-    STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=6; STATE._smileT=0; noteAct('走近闻一闻');
+    STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=5; STATE._smileT=0; noteAct('走近闻一闻');
   }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
   rp.blink=damp(rp.blink,0,2.2,dt);
@@ -2032,7 +2033,13 @@ function updateActions(t, dt){
     // 瞳孔放大：警觉/蹲伏/惊讶/扑玩时放大，放松收细；保留基线 .12，无人时也不至于细成空洞
     const pupilRaw=Math.min(1,STATE.moodBlend*.7*(1-STATE.enjoy*.8)+STATE.crouchAmt*.5
       +STATE.startle*.9*(1-STATE.enjoy)+(STATE.action==='pounce'?.6:0)+STATE.happy*.25);
-    const pupilTarget=Math.max(.17,pupilRaw-STATE.enjoy*.08);   // 下限 .12→.17：人离开后缩小幅度减弱约 40%
+    let pupilTarget=Math.max(.17,pupilRaw-STATE.enjoy*.08);     // 下限 .12→.17：人离开后缩小幅度减弱约 40%
+    // 抚摸镜头 / 检测不到人脸时：瞳孔应当放大（放松、好奇），而不是缩小
+    const petNow=Math.max(STATE.enjoy||0, STATE._handCover?1:0);
+    const faceLost=(STATE.inputMode==='camera') && !(STATE.face && STATE.face.active);
+    const dilate=Math.max(petNow, faceLost?0.75:0);
+    if(dilate>0.05) pupilTarget=Math.max(pupilTarget, .34+.52*dilate);
+    pupilTarget=Math.min(.95,pupilTarget);
     STATE.pupil=damp(STATE.pupil,pupilTarget,9,dt);
     // 眼球转角按世界（屏幕）轴施加：pivot 挂在倾斜的 Bone004 下，直接用本地 Euler 会沿脊柱斜轴
     // 转动、水平扫视变成圆锥摆动；这里把世界轴 yaw/pitch 共轭进头部本地坐标系，方向与屏幕一致
@@ -2855,8 +2862,14 @@ const CatAudio=(()=>{
 window.CatAudio=CatAudio;   // 调试钩子，便于自检音频元素状态
 
 /* ================= 渲染循环 ================= */
+const _frameMin=1/42;   // 限到约 42fps：省电、减热，画面几乎感觉不到
+let _acc=0, _lastLoopT=performance.now();
 function loop(){
   requestAnimationFrame(loop);
+  const _nowMs=performance.now();
+  _acc+=_nowMs-_lastLoopT; _lastLoopT=_nowMs;
+  if(_acc < _frameMin*1000) return;      // 跳帧，但 rAF 继续
+  _acc=0;
   const dt = Math.min(clock.getDelta(), .05);
   const t = clock.elapsedTime;
   updateActions(t, dt);
@@ -2915,7 +2928,7 @@ function loop(){
     const A=STATE._dprAcc; A.n++;
     if(_now-A.t>1500){
       const fps=A.n/((_now-A.t)/1000);
-      const levels=[1.0,1.25,1.5];
+      const levels=[1.0,1.15,1.25];
       const cap=Math.min(window.devicePixelRatio||1,1.5);
       if(fps<40){ A.down++; A.up=0; } else if(fps>58){ A.up++; A.down=0; } else { A.down=0; A.up=0; }
       // 连续两轮同向 + 距上次调整≥4.5s：避免在阈值附近来回跳（画布反复重建会造成"闪一下"）
@@ -2933,7 +2946,7 @@ addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clock.stop(); else clock.start();
@@ -4205,11 +4218,12 @@ function target(){
     o.shakeX+=sd*d*0.12*shk*amp*ph; o.roll+=sd*0.028*shk*amp*ph; } else shakeT=0;
   if(Math.abs(hs.roll)>0.02||Math.abs(hs.yaw)>0.02){                 // 时钟摆头
     o.roll+=hs.roll*0.45*amp; o.shakeX+=hs.yaw*d*0.10*amp; o.lookDy+=hs.pitch*0.04*amp; }
-  // 抚摸 → 慢华尔兹轻摇
-  if(E>0.12){ const w=tGlobal*0.62;
-    o.x+=Math.sin(w)*d*0.17*amp*E; o.roll+=Math.sin(w+0.55)*0.032*amp*E;
-    o.z-=d*0.07*amp*E; o.y+=Math.sin(w*2)*d*0.02*amp*E;
-    o.lookDy+=Math.sin(w+1.1)*0.008*amp*E; }
+  // 抚摸 → 慢华尔兹轻摇（enjoy 或手遮脸都算，幅度加大）
+  const petAmt=Math.max(E, (S._handCover?0.85:0));
+  if(petAmt>0.06){ const w=tGlobal*0.62, e=Math.min(1,petAmt);
+    o.x+=Math.sin(w)*d*0.26*amp*e; o.roll+=Math.sin(w+0.55)*0.050*amp*e;
+    o.z-=d*0.10*amp*e; o.y+=Math.sin(w*2)*d*0.030*amp*e;
+    o.lookDy+=Math.sin(w+1.1)*0.012*amp*e; }
   if(ev.heart>0){ const q=p('heart'), e=smoothstep(0,.26,q)*(1-smoothstep(.72,.92,q));
     o.z+=d*0.30*amp*e; o.y+=d*0.02*amp*e;                 // 轻轻后拉，不切远景
     o.fov-=6.0*amp*e;                                     // 轻微变焦
