@@ -672,7 +672,7 @@ STATE.entered=false; STATE.action='idle'; STATE.actionT=0;
 /* ================= Three 基础 ================= */
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = false;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -2928,7 +2928,7 @@ function loop(){
     const A=STATE._dprAcc; A.n++;
     if(_now-A.t>1500){
       const fps=A.n/((_now-A.t)/1000);
-      const levels=[1.0,1.15,1.25];
+      const levels=[1.0,1.25,1.5];
       const cap=Math.min(window.devicePixelRatio||1,1.5);
       if(fps<40){ A.down++; A.up=0; } else if(fps>58){ A.up++; A.down=0; } else { A.down=0; A.up=0; }
       // 连续两轮同向 + 距上次调整≥4.5s：避免在阈值附近来回跳（画布反复重建会造成"闪一下"）
@@ -2946,7 +2946,7 @@ addEventListener('resize', ()=>{
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 });
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clock.stop(); else clock.start();
@@ -4023,7 +4023,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let n=0; while(!window.__CAT_READY && n++<900) await sleep(100);
 await sleep(600);
 
-const P={on:true, fuzz:0.18, fur:0.06, grain:0.015, rough:0.90, env:0.52, aniso:16, sat:1.16, bump:0.32, lift:0.13, face:0.26};
+const P={on:true, fuzz:0.16, fur:0.05, grain:0.0, rough:0.90, env:0.52, aniso:16, sat:1.16, bump:0.20, lift:0.13, face:0.26};
 
 let bodyMat=null;
 const findBody=()=>{
@@ -4074,7 +4074,7 @@ if(bodyMat && !_NO_MAT){
   float _soft=pow(1.0-_ndv,1.35)*mix(0.86,1.14,_h);
   gl_FragColor.rgb += vec3(1.0,0.95,0.88)*_soft*uFurA;
   // ③ 毛绒颗粒
-  gl_FragColor.rgb *= (1.0+(_h-0.5)*uGrainA*0.18);
+  gl_FragColor.rgb *= (1.0+(_h-0.5)*uGrainA*0.10);
   // ④ 毛色饱和度
   float _lum=dot(gl_FragColor.rgb, vec3(0.2126,0.7152,0.0722));
   gl_FragColor.rgb = mix(vec3(_lum), gl_FragColor.rgb, uSatA2);
