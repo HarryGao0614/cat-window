@@ -4244,9 +4244,15 @@ if(!_NO_MAT) applyTex();
     V.lastIntent=it.id; V.log.push({t:+now.toFixed(1), id:it.id});
     if(it.id==='come'){
       if(!STATE.entered && window.__enterMain) window.__enterMain();
-      else if(STATE.top!=='engaged'){ STATE.top='engaged'; STATE.hasJoined=false; STATE.action='walkIn'; STATE.actionT=0; }
-      else { STATE.action='notice'; STATE.actionT=0; STATE.noticeT=0; STATE.moveZ+=(0.115-STATE.moveZ)*0.35; }
-      STATE.actionCool=1.4;
+      else {
+        // 「咪咪」= 凑近嗅闻（复用微笑触发的 sniff 动作，与逗猫棒/运镜自然衔接）
+        if(STATE.top!=='engaged'){ STATE.top='engaged'; }
+        STATE.hasJoined=true;
+        STATE.moveX=0;
+        STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=5; STATE._smileT=0;
+        STATE.actionCool=2.2;
+        if(typeof noteAct==='function') noteAct('走近闻一闻');
+      }
     } else if(it.id==='sit'){
       STATE.action='sit'; STATE.actionT=0; STATE.actionDur=3.4; STATE.actionCool=2.4;
     }
@@ -4318,5 +4324,153 @@ if(!_NO_MAT) applyTex();
 </script>
 
 
+
+<script type="module">
+
+/* ===== 微运镜（合并自 try_cam7）===== */
+
+
+
+
+
+// ===== 运镜 v5：自然触发 + 六处修正 =====
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let n=0; while(!(window.rig&&window.renderer&&window.scene&&window.camera) && n++<900) await sleep(100);
+if(window.rig&&window.renderer){
+const P={on:true, amp:0.72, ease:1.0};   // 幅度：×0.8 之后再降 10% = ×0.72
+const D=()=>((window.rig&&window.rig.camBase&&window.rig.camBase.dist)||0.59);
+const baseFov=window.camera.fov;
+const DUR={startle:1.6,pounce:1.5,paw:1.1,heart:2.6};
+const ev={startle:0,pounce:0,paw:0,heart:0};
+const fire=k=>{ ev[k]=DUR[k]; };
+let danceSide=1, prevAct='', prevStartle=0, prevPaw=0, lastEvent='—', lastEventT=0;
+const log=e=>{ lastEvent=e; lastEventT=performance.now(); };
+const smoothstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+const cur={x:0,y:0,z:0,lookDy:0,shakeX:0,roll:0,fov:0};
+let tGlobal=0,lastT=0,shakeT=0,dtGlobal=0,lastTX=null,shakeE=0,shakeSide=1;
+
+function detect(dt){
+  const S=window.STATE||{};
+  const act=S.action||'';
+  if(act!==prevAct){
+    if(act==='pounce'){ fire('pounce'); log('扑玩→镜头后拉'); }
+    if(act==='dance'){ danceSide=-danceSide; log('跳舞→'+(danceSide<0?'左边':'右边')+'半环绕'); }
+    if(act==='stretch') log('伸懒腰→后拉弧线');
+    prevAct=act;
+  }
+  const st=S.startle||0;
+  if(st>0.5&&prevStartle<=0.5){ fire('startle'); log('惊讶→猛后拉'); }
+  prevStartle=st;
+  const pw=Math.max((S.pawLift&&S.pawLift.L)||0,(S.pawLift&&S.pawLift.R)||0);
+  if(pw>0.5&&prevPaw<=0.5){ fire('paw'); log('举爪→后仰'); }
+  prevPaw=pw;
+  // 爱心：懒绑定，音频模块可能晚加载
+  if(window.__sfxPlay && !window.__sfxWrapped){
+    const o=window.__sfxPlay;
+    window.__sfxPlay=function(name){ if(name==='heart'){ fire('heart'); log('爱心→希区柯克变焦'); } return o.apply(this,arguments); };
+    window.__sfxWrapped=true;
+  }
+}
+
+function target(){
+  const S=window.STATE||{}, d=D(), amp=P.amp, A=S.action||'', at=S.actionT||0;
+  const R=(A==='shake')?{nod:0,shake:0,side:1,nodT:99}:(window.__REACT||{nod:0,shake:0,side:1,nodT:99});
+  const hs=S.headSway||{yaw:0,pitch:0,roll:0};
+  const E=S.enjoy||0;
+  const o={x:0,y:0,z:0,lookDy:0,shakeX:0,roll:0,fov:0};
+  o.z += Math.sin(tGlobal*0.9)*0.004*d*amp;                        // 常态呼吸
+  // —— 猫的动作 ——
+  if(A==='walkIn'){ const k=Math.min(1,at/2.2); o.z-=d*0.30*amp*k; o.y-=d*0.050*amp*k; }
+  if(A==='sit'){ const k=Math.min(1,at/1.2); o.y-=d*0.14*amp*k; o.z+=d*0.04*amp*k; }
+  if(A==='stretch'){ const u=Math.min(1,at/3.2), arc=Math.sin(u*Math.PI);
+    o.z+=d*0.20*amp*arc; o.x+=(S._arcSign||1)*d*0.10*amp*arc; o.y+=d*0.03*amp*arc; o.lookDy-=0.006*amp*arc; }
+  if(A==='dance'){ const k=Math.sin(Math.min(1,at/0.8)*Math.PI*0.5);
+    const th=0.1745*Math.sin(at*Math.PI*2/2.6)*danceSide;     // 摆到 ±10° 就回来，不绕圈
+    o.x+=d*Math.sin(th)*amp*k*0.9; o.z-=d*(1-Math.cos(th))*amp*k;
+    o.y+=Math.sin(at*Math.PI*2*1.9)*d*0.018*amp*k;
+    o.lookDy+=Math.sin(at*Math.PI*2*1.9+0.9)*0.006*amp*k; }
+  if(A==='knead'){ const k=Math.sin(Math.min(1,at/0.9)*Math.PI*0.5); o.y-=d*0.07*amp*k; o.z-=d*0.15*amp*k; o.lookDy+=0.006*amp*k; }
+  if(A==='sniff'){ const k=Math.sin(Math.min(1,at/0.9)*Math.PI*0.5); o.z-=d*0.17*amp*k; o.y-=d*0.01*amp*k; }
+  // —— 猫的反应（事件）——
+  const p=k=>1-ev[k]/DUR[k];
+  // 扑玩：等猫冲到 55% 才开始后拉，95% 时到位，退步回收
+  if(A==='pounce'){ const e=smoothstep(0.55,0.95,at)*(1-smoothstep(1.20,1.70,at));
+    o.z+=d*0.30*amp*e; o.y+=d*0.045*amp*e; }
+  if(ev.paw>0){ const q=p('paw'), e=smoothstep(0,.22,q)*(1-smoothstep(.55,1,q));
+    o.z+=d*0.14*amp*e; o.y+=d*0.07*amp*e; o.roll+=0.030*amp*e; }
+  if(ev.startle>0){ const q=p('startle'), e=smoothstep(0,.16,q)*(1-smoothstep(.5,1,q));
+    o.z+=d*0.46*amp*e; o.y+=d*0.11*amp*e; o.roll+=Math.sin(q*54)*0.012*amp*e; }
+  // 惊讶之外的即时小反应：点头 / 摇头 / 时钟摆头
+  if(R.nod>0.02){ const a=R.nod, ph=Math.min(1,(R.nodT||0)/0.62);
+    o.lookDy-=0.055*a*amp*Math.sin(Math.PI*ph); o.y-=d*0.015*a*amp*Math.sin(Math.PI*ph); }
+  // 摇头：优先内部反应量（主文件每帧写 window.__REACT）；再用头骨偏航角速度兜底
+  {
+    const hb=window.rig&&window.rig.bones&&window.rig.bones['Bone004'];
+    if(hb){
+      const e=new THREE.Euler().setFromQuaternion(hb.quaternion,'YXZ');
+      const yaw=e.y;
+      if(lastTX!==null && dtGlobal>0.0005){
+        const rate=(yaw-lastTX)/dtGlobal;            // rad/s
+        if(Math.abs(rate)>1.7){ shakeE=Math.min(1,shakeE+Math.abs(rate)*0.16); shakeSide=rate>0?1:-1; }
+      }
+      lastTX=yaw;
+    }
+  }
+  shakeE*=Math.pow(0.10,dtGlobal);
+  const shk=Math.max(R.shake||0, shakeE), sd=(R.shake>0.02?(R.side||1):shakeSide);
+  if(shk>0.02){ shakeT+=0.016;
+    const ph=Math.sin(shakeT*Math.PI*2*4.2);
+    o.shakeX+=sd*d*0.12*shk*amp*ph; o.roll+=sd*0.028*shk*amp*ph; } else shakeT=0;
+  if(Math.abs(hs.roll)>0.02||Math.abs(hs.yaw)>0.02){                 // 时钟摆头
+    o.roll+=hs.roll*0.45*amp; o.shakeX+=hs.yaw*d*0.10*amp; o.lookDy+=hs.pitch*0.04*amp; }
+  // 抚摸 → 慢华尔兹轻摇（enjoy 或手遮脸都算，幅度加大）
+  const petAmt=Math.max(E, (S._handCover?0.85:0));
+  if(petAmt>0.06){ const w=tGlobal*0.62, e=Math.min(1,petAmt);
+    o.x+=Math.sin(w)*d*0.26*amp*e; o.roll+=Math.sin(w+0.55)*0.050*amp*e;
+    o.z-=d*0.10*amp*e; o.y+=Math.sin(w*2)*d*0.030*amp*e;
+    o.lookDy+=Math.sin(w+1.1)*0.012*amp*e; }
+  if(ev.heart>0){ const q=p('heart'), e=smoothstep(0,.26,q)*(1-smoothstep(.72,.92,q));
+    o.z+=d*0.30*amp*e; o.y+=d*0.02*amp*e;                 // 轻轻后拉，不切远景
+    o.fov-=6.0*amp*e;                                     // 轻微变焦
+    o.roll+=Math.sin(q*Math.PI*1.8)*0.016*amp*e; }
+  return o;
+}
+
+const orig=renderer.render.bind(renderer);
+renderer.render=(sc,cam)=>{
+  if(!P.on || sc!==window.scene){ orig(sc,cam); return; }
+  const now=performance.now()/1000, dt=Math.min(0.25, lastT?now-lastT:0.016); lastT=now; tGlobal+=dt; dtGlobal=Math.min(dt,0.2);
+  detect(dt);
+  for(const k in ev) if(ev[k]>0) ev[k]=Math.max(0,ev[k]-dt);
+  const tg=target(), kk=1-Math.exp(-dt*7.0*P.ease);
+  for(const key in cur) cur[key]+=((tg[key]||0)-cur[key])*kk;
+  // 运镜是否仍在进行（给动作调度用：运镜没结束不切下一个动作）
+  window.__CAM_BUSY=(Math.abs(cur.x)+Math.abs(cur.y)+Math.abs(cur.z)>0.004)
+    || ev.startle>0||ev.pounce>0||ev.paw>0||ev.heart>0;
+  const sp=new THREE.Vector3().copy(cam.position), sq=new THREE.Quaternion().copy(cam.quaternion), fv=cam.fov;
+  camera.position.x+=cur.x; camera.position.y+=cur.y; camera.position.z+=cur.z;
+  const cb=(window.rig&&window.rig.camBase)||{lx:0,ly:0.22,lz:0.14};
+  camera.lookAt(cb.lx+cur.shakeX, cb.ly+cur.lookDy, cb.lz);
+  camera.rotateZ(cur.roll);
+  if(Math.abs(cur.fov)>0.01){ camera.fov=baseFov+cur.fov; camera.updateProjectionMatrix(); }
+  orig(sc,cam);
+  camera.position.copy(sp); camera.quaternion.copy(sq);
+  if(Math.abs(cur.fov)>0.01){ camera.fov=fv; camera.updateProjectionMatrix(); }
+};
+
+window.__CAM={P,fire,ev,cur,danceSide:()=>danceSide,log,
+  get off(){return {dx:+cur.x.toFixed(3),dy:+cur.y.toFixed(3),dz:+cur.z.toFixed(3),lookDy:+cur.lookDy.toFixed(3),shakeX:+cur.shakeX.toFixed(3),roll:+cur.roll.toFixed(3),fov:+cur.fov.toFixed(2)};}};
+window.__CAM_CALC=(patch)=>{ const save={}; Object.assign(save,window.STATE||{}); Object.assign(window.STATE,patch||{});
+  const r=target(); for(const k in save) window.STATE[k]=save[k]; return r; };
+window.__CAM_READY=true;
+console.log('[cam5] ready');
+}
+
+
+
+
+
+
+</script>
 </body>
 </html>
