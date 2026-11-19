@@ -1270,10 +1270,12 @@ function loadCat(b64){
     irisMat.onBeforeCompile=(sh)=>{
       sh.uniforms.uPupil={value:0};
       sh.uniforms.uCenter={value:new THREE.Vector2(.5,.7025)};
-      sh.uniforms.uCapH={value:.5};
+      sh.uniforms.uCapH={value:.56};   // 虹膜填满眼眶，转动时不露白
       sh.uniforms.uSquint={value:0};
       sh.uniforms.uLower={value:0};
-      sh.uniforms.uLidTilt={value:0};   // 眼睑倾斜：眯/闭眼时内角低、外角高（倒八字）
+      sh.uniforms.uLidTilt={value:0};
+      sh.uniforms.uEyeQR={value:new THREE.Matrix3()};   // inverse(眼球旋转)：眼皮遮罩锁在头坐标系
+      sh.uniforms.uLidK={value:1.9};                    // 下眼皮高度系数（1=原值；取巧档=1.9）   // 眼睑倾斜：眯/闭眼时内角低、外角高（倒八字）
       sh.uniforms.uGaze={value:new THREE.Vector2(0,0)};
       // 好看度第2步：淡草绿 + 宝石光泽（用户实测参数）
       sh.uniforms.uSatA={value:1.20};    // 绿色浓度
@@ -1283,10 +1285,10 @@ function loadCat(b64){
       sh.uniforms.uLidA={value:0.42};    // 眼睑投影
       sh.uniforms.uCatchA={value:2.00};  // 眼神光
       sh.uniforms.uWetA={value:0.10};    // 边缘湿润
-      sh.vertexShader='varying vec3 vEyeRel;\n'+sh.vertexShader
+      sh.vertexShader='uniform mat3 uEyeQR;\n'+'varying vec3 vEyeRel;\n'+sh.vertexShader
         .replace('#include <project_vertex>',
-          '#include <project_vertex>\n vEyeRel=(modelViewMatrix*vec4(position,0.0)).xyz;');
-      sh.fragmentShader='uniform float uPupil; uniform float uSatA; uniform float uBriA; uniform float uGlossA; uniform float uRingA; uniform float uLidA; uniform float uCatchA; uniform float uWetA; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform float uLidTilt; uniform vec2 uGaze;\n'
+          '#include <project_vertex>\n vEyeRel=(modelViewMatrix*vec4(uEyeQR*position,0.0)).xyz;');
+      sh.fragmentShader='uniform float uPupil; uniform float uSatA; uniform float uBriA; uniform float uGlossA; uniform float uRingA; uniform float uLidA; uniform float uCatchA; uniform float uWetA; uniform vec2 uCenter; uniform float uCapH; uniform float uSquint; uniform float uLower; uniform float uLidTilt; uniform vec2 uGaze; uniform float uEyeRotA; uniform float uLidK;\n'
         +'varying vec3 vEyeRel;\n'
         +sh.fragmentShader
         .replace('#include <clipping_planes_fragment>',
@@ -1299,7 +1301,7 @@ function loadCat(b64){
           '  float nx=clamp(abs(rel.x)/0.0085,0.0,1.0);\n'+
           '  float arc=sqrt(max(0.0,1.0-nx*nx));\n'+
           '  // 睁眼时下缘向下覆盖下眼眶暗墙（uLower=1）；闭眼/全闭时 uLower=0、下缘与上缘对称合拢\n'+
-          '  float lowerExtra=0.0025*uLower;\n'+
+          '  float lowerExtra=(0.0025*uLidK)*uLower;   // 下眼皮高度（uLidK 调档）\n'+
           '  float upperH=halfH*arc;\n'+
           '  float lowerH=(halfH+lowerExtra)*arc;\n'+
           '  // 完整闭合：上下缘都收到 0 时整片丢弃，不留细缝\n'+
@@ -1337,6 +1339,8 @@ function loadCat(b64){
         '  float rr=length(vec2(x,y))/max(uCapH,1e-4);\n'+
         '  float ring=smoothstep(0.60,1.02,rr);\n'+
         '  diffuseColor.rgb*=mix(1.0,0.55,ring*uRingA);\n'+
+          '  float irisM=1.0-smoothstep(halfW-0.034,halfW+0.010,d);   // 虹膜范围'+ 
+          '  diffuseColor.rgb=mix(vec3(0.050,0.040,0.034),diffuseColor.rgb,irisM);  // 虹膜外=眼睑阴影色，绝不露白'+
         '  diffuseColor.rgb*=mix(1.0,0.80,smoothstep(0.0,0.16,pm));\n'+
         '  {\n'+
         '    vec2 relE=vEyeRel.xy-uGaze*0.0032;\n'+
@@ -1965,7 +1969,7 @@ function updateActions(t, dt){
   if(_f && _f.active && (_f.smile||0)>SMILE_THRESH) STATE._smileT=(STATE._smileT||0)+dt;
   else STATE._smileT=0;
   if(STATE._smileT>.28 && STATE.sniffCool<=0 && STATE.top==='engaged'
-     && STATE.action==='idle' && STATE.hasJoined){
+     && STATE.action==='idle' && STATE.hasJoined && !window.__CAM_BUSY){
     STATE.action='sniff'; STATE.actionT=0; STATE.sniffCool=5; STATE._smileT=0; noteAct('走近闻一闻');
   }
   // 包络衰减（慢眨眼/瞥视/友好/好奇各有时长）
@@ -2038,17 +2042,22 @@ function updateActions(t, dt){
     const petNow=Math.max(STATE.enjoy||0, STATE._handCover?1:0);
     const faceLost=(STATE.inputMode==='camera') && !(STATE.face && STATE.face.active);
     const dilate=Math.max(petNow, faceLost?0.75:0);
-    if(dilate>0.05) pupilTarget=Math.max(pupilTarget, .34+.52*dilate);
+    pupilTarget=pupilTarget*.80+.16;                                   // 基准放大：正常状态瞳孔更圆
+    if(dilate>0.05) pupilTarget=Math.max(pupilTarget*(1+0.35*dilate), .40+.55*dilate);   // 抚摸/无人脸：等比例再放大
     pupilTarget=Math.min(.95,pupilTarget);
     STATE.pupil=damp(STATE.pupil,pupilTarget,9,dt);
     // 眼球转角按世界（屏幕）轴施加：pivot 挂在倾斜的 Bone004 下，直接用本地 Euler 会沿脊柱斜轴
     // 转动、水平扫视变成圆锥摆动；这里把世界轴 yaw/pitch 共轭进头部本地坐标系，方向与屏幕一致
     rig.eyePivots.forEach(e=>{
+      const _EY_QR=rig.eyePivots._qr||(rig.eyePivots._qr=new THREE.Quaternion());
+      const _EY_M4=rig.eyePivots._m4||(rig.eyePivots._m4=new THREE.Matrix4());
       rig.bones.Bone004.getWorldQuaternion(_EY_QH);
       _EY_QY.setFromAxisAngle(_AX_Y,yaw);
-      _EY_QP.setFromAxisAngle(_AX_X,pitch);
+      _EY_QP.setFromAxisAngle(_AX_X,THREE.MathUtils.clamp(pitch,-0.13,0.07));   // 限角：上 7.5° / 下 4°
       _EY_DQ.copy(_EY_QY).multiply(_EY_QP);
       e.pivot.quaternion.copy(_EY_QH).invert().multiply(_EY_DQ).multiply(_EY_QH);
+      _EY_QR.copy(e.pivot.quaternion).invert();
+      _EY_M4.makeRotationFromQuaternion(_EY_QR);
       // 闭眼时把眼球轻微缩小并后移：避免闭眼后眼角露出虹膜的一小条（穿帮）
       const _shut=Math.max(0,Math.min(1,(eyeClose-.55)/.45));
       const _es=1-.16*_shut;
@@ -2058,6 +2067,8 @@ function updateActions(t, dt){
       const iris=e.group.children[0];
       if(iris.material.userData.shader){
         const un=iris.material.userData.shader.uniforms;
+        un.uEyeQR.value.setFromMatrix4(_EY_M4);   // 眼皮遮罩锁头部
+        un.uLidK.value=1.9;                       // 下眼皮高度（取巧档）
         un.uPupil.value=STATE.pupil;
         un.uSquint.value=eyeClose;
         un.uLower.value=STATE._lowerOpen;
@@ -2110,13 +2121,13 @@ function updateActions(t, dt){
   const PINCH_POUNCE = false;
   const pinchNow = PINCH_POUNCE && gNow==='pinch';
   if(STATE.pounceCool>0) STATE.pounceCool-=dt;
-  if(pinchNow && !STATE._pinchHeld && STATE.pounceCool<=0 && STATE.top==='engaged'){
+  if(pinchNow && !STATE._pinchHeld && STATE.pounceCool<=0 && STATE.top==='engaged' && !window.__CAM_BUSY){
     STATE.action='pounce';STATE.actionT=0;
   }
   STATE._pinchHeld=pinchNow;
   if(STATE.clickPounce){
     STATE.clickPounce=false;
-    if(STATE.pounceCool<=0 && STATE.action!=='pounce' && STATE.top==='engaged'){
+    if(STATE.pounceCool<=0 && STATE.action!=='pounce' && STATE.top==='engaged' && !window.__CAM_BUSY){
       STATE.action='pounce';STATE.actionT=0;
     }
   }
@@ -2130,7 +2141,7 @@ function updateActions(t, dt){
       STATE.actionCool-=dt;
       // 抬爪或对视进行中不打断互动；安静时才随机安排日常小动作
       const busy=STATE.pawLift.L>.05||STATE.pawLift.R>.05||STATE.mutual.active;
-      if(STATE.actionCool<=0 && !busy){
+      if(STATE.actionCool<=0 && !busy && !window.__CAM_BUSY){
         // 首轮：踩奶/抖毛/扑玩 —— 每个先各做两遍（且不连续重复），之后才转常规概率
         const FRESH=['knead','shake','stretch'];   // 扑玩不再进入自主动作
         STATE.seen=STATE.seen||{};
@@ -2186,7 +2197,7 @@ function updateActions(t, dt){
     const pointCond = gNow==='point';
     const wasPoint = G.point.on;
     const pointOn = gate(G.point, pointCond, .1, .35, dt);
-    if(pointOn && !wasPoint){ STATE.action='notice'; STATE.actionT=0; STATE.noticeT=0; }
+    if(pointOn && !wasPoint && !window.__CAM_BUSY){ STATE.action='notice'; STATE.actionT=0; STATE.noticeT=0; }
     runAutonomous();
   }
 
@@ -2638,6 +2649,21 @@ const D=.09*c + SITT.D*s;
     applySway('Bone001',.60);   // 躯干只小幅跟动（实测身体几乎不动）
     applySway('Bone002',.75);
     applySway('Bone004',1,shHeadYaw,shHeadPitch,shHeadRoll);   // 头部：快速小幅自身旋转
+    // ===== 头部跟随：仅在「逗猫棒」模式、且目标偏出正前方中间区时，用转头分担视线（看猫猫模式不转头） =====
+    if(STATE.inputMode==='mouse' && STATE.target && !STATE.startle){
+      const _tx=Math.max(-1,Math.min(1,STATE.target.x||0)), _ty=(STATE.target.y||0);
+      const _side=Math.max(0,Math.abs(_tx)-0.55), _up=Math.max(0,_ty-0.55);
+      const _yawA=Math.sign(_tx||1)*_side*0.50;   // 左右最多 ≈14°
+      const _pitA=-_up*0.45;                      // 向上最多 ≈11°
+      if(Math.abs(_yawA)+Math.abs(_pitA)>1e-4){
+        const _hb=rig.bones['Bone004'], _qb=rig.base['Bone004'];
+        _SW_QY.setFromAxisAngle(_AX_Y,_yawA);
+        _SW_QP.setFromAxisAngle(_AX_X,_pitA);
+        _SW_W.copy(_SW_QY).multiply(_SW_QP);
+        _SW_L.copy(_qb).invert().multiply(_SW_W).multiply(_qb);
+        _hb.quaternion.multiply(_SW_L);
+      }
+    }
     // 尾巴也被甩起来
     if(rig.bones.tail1) rig.bones.tail1.quaternion.multiply(
       new THREE.Quaternion().setFromEuler(new THREE.Euler(0,shYaw*1.6,shRoll*1.2)));
@@ -2745,7 +2771,7 @@ const D=.09*c + SITT.D*s;
     // 能量衰减 + 触发
     STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.28);
     if(STATE._waveE>=.50 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
-       && (STATE.action==='idle'||STATE.action==='sit'||STATE.action==='notice')){
+       && (STATE.action==='idle'||STATE.action==='sit'||STATE.action==='notice') && !window.__CAM_BUSY){
       STATE._waveE=0; STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
       STATE.danceCool=3.0; noteAct('手舞足蹈');
     }
@@ -4132,7 +4158,7 @@ if(!_NO_MAT) applyTex();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let n=0; while(!(window.rig&&window.renderer&&window.scene&&window.camera) && n++<900) await sleep(100);
 if(window.rig&&window.renderer){
-const P={on:true, amp:1.0, ease:1.0};
+const P={on:true, amp:0.8, ease:1.0};   // 幅度统一 ×0.8
 const D=()=>((window.rig&&window.rig.camBase&&window.rig.camBase.dist)||0.59);
 const baseFov=window.camera.fov;
 const DUR={startle:1.6,pounce:1.5,paw:1.1,heart:2.6};
@@ -4239,6 +4265,9 @@ renderer.render=(sc,cam)=>{
   for(const k in ev) if(ev[k]>0) ev[k]=Math.max(0,ev[k]-dt);
   const tg=target(), kk=1-Math.exp(-dt*7.0*P.ease);
   for(const key in cur) cur[key]+=((tg[key]||0)-cur[key])*kk;
+  // 运镜是否仍在进行（给动作调度用：运镜没结束不切下一个动作）
+  window.__CAM_BUSY=(Math.abs(cur.x)+Math.abs(cur.y)+Math.abs(cur.z)>0.004)
+    || ev.startle>0||ev.pounce>0||ev.paw>0||ev.heart>0;
   const sp=new THREE.Vector3().copy(cam.position), sq=new THREE.Quaternion().copy(cam.quaternion), fv=cam.fov;
   camera.position.x+=cur.x; camera.position.y+=cur.y; camera.position.z+=cur.z;
   const cb=(window.rig&&window.rig.camBase)||{lx:0,ly:0.22,lz:0.14};
