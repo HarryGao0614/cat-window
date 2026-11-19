@@ -2183,20 +2183,16 @@ function updateActions(t, dt){
           let pick=null;
           for(let tries=0;tries<8;tries++){
             const r=Math.random();
-            if(r<.23){ pick='stand'; break; }        // 站着发呆 23%
-            else if(r<.45){ pick='sit'; break; }     // 坐着 22%
-            else if(r<.65){ pick='knead'; break; }   // 踩奶 20%
-            else if(r<.85){ pick='shake'; break; }   // 抖毛 20%
-            else { pick='stretch'; break; }          // 伸懒腰 15%
+            if(r<.30){ pick='stand'; break; }        // 站着发呆 30%
+            else if(r<.54){ pick='knead'; break; }   // 踩奶 24%
+            else if(r<.78){ pick='shake'; break; }   // 抖毛 24%
+            else { pick='stretch'; break; }          // 伸懒腰 22%
           }
           if(pick==='stand'||pick===STATE._lastAuto){
             // 站着发呆 或 与上次重复 → 允许发呆（发呆本身不产生重复动作感）
             if(pick===STATE._lastAuto && pick!=='stand'){ pick='stand'; }
             STATE.actionCool=1.6+Math.random()*1.8;
             STATE._lastAuto='stand';
-          } else if(pick==='sit'){
-            STATE.action='sit';STATE.actionT=0;STATE.actionDur=2.4+Math.random()*1.6;
-            STATE._lastAuto='sit';
           } else {
             fire(pick);
           }
@@ -2632,11 +2628,12 @@ const D=.09*c + SITT.D*s;
   };
   // 跟随眼神转头已停用：脊柱各段只保留步态/动作的转向与俯仰。bend 主要作用于下/中脊柱；
   // 头骨在平缓弧上带少量 bend*.5，在紧圈（掉头）时按弯弧强度衰减到 0，保证头部不被拧、随身体干净跟随。
+  const _wandWatch=(STATE.inputMode==='mouse' && STATE.pointer.active && (clock.elapsedTime-STATE.pointer.t)<1.2)?1:0;   // 逗猫棒优先视线
   const _tight=Math.max(0,Math.min(1,Math.abs(GAIT.yawVel)/2));
   const headBend = GAIT.bend*.5*(1-_tight);
   spineRot('Bone001', -.10, -.18, GAIT.spineLead+GAIT.bend*.15, sA*.5, 0, 0,    0,   .034);
   spineRot('Bone002', -.20, 0,    GAIT.bend*.35, sA*.55, 1, .12, .5,  .03);
-  spineRot('Bone004', -.16, 0,    GAIT.headLead+headBend, sA*.15+stHead+nodAnim, 2, .24, .5, .014);
+  spineRot('Bone004', -.16, 0,    GAIT.headLead+headBend, sA*.15+(stHead+nodAnim)*(1-.75*_wandWatch), 2, .24, .5, .014);
   // 抖毛/哆嗦：高频快速抖动，幅度小、时间短；头部最明显，身体递减
   let shYaw=0,shRoll=0,shPitch=0,shRoot=0,shHeadYaw=0,shHeadRoll=0,shHeadPitch=0;
   if(act==='shake'){
@@ -2672,9 +2669,10 @@ const D=.09*c + SITT.D*s;
     // ===== 头部跟随：仅在「逗猫棒」模式、且目标偏出正前方中间区时，用转头分担视线（看猫猫模式不转头） =====
     if(STATE.inputMode==='mouse' && STATE.target && !STATE.startle){
       const _tx=Math.max(-1,Math.min(1,STATE.target.x||0)), _ty=(STATE.target.y||0);
-      const _side=Math.max(0,Math.abs(_tx)-0.55), _up=Math.max(0,_ty-0.55);
-      const _yawA=Math.sign(_tx||1)*_side*0.50;   // 左右最多 ≈14°
-      const _pitA=-_up*0.45;                      // 向上最多 ≈11°
+      const _thr=_wandWatch?0.20:0.55;
+      const _side=Math.max(0,Math.abs(_tx)-_thr), _up=Math.max(0,_ty-_thr);
+      const _yawA=Math.sign(_tx||1)*_side*(_wandWatch?0.62:0.50);   // 逗猫棒模式最多 ≈25°
+      const _pitA=-_up*(_wandWatch?0.55:0.45);                      // 向上/向下都跟
       if(Math.abs(_yawA)+Math.abs(_pitA)>1e-4){
         const _hb=rig.bones['Bone004'], _qb=rig.base['Bone004'];
         _SW_QY.setFromAxisAngle(_AX_Y,_yawA);
@@ -2777,17 +2775,7 @@ const D=.09*c + SITT.D*s;
       }
       STATE._hPrev={x:hd.x,y:hd.y,t:nowW};
     } else { STATE._hPrev=null; STATE._hDir=undefined; }
-    // 2) 逗猫棒：指针快速来回（鼠标模式）
-    if(STATE.inputMode==='mouse' && STATE.pointer.active){
-      if(STATE._wPrev && nowW-STATE._wPrev.t<.35){
-        const sp=Math.hypot(STATE.pointer.x-STATE._wPrev.x, STATE.pointer.y-STATE._wPrev.y)/dtW;
-        const dir=Math.sign(STATE.pointer.x-STATE._wPrev.x);
-        if(sp>1.35 && dir!==0 && STATE._wDir!==undefined && dir!==STATE._wDir) STATE._waveE=(STATE._waveE||0)+dtW*5.6;
-        else if(sp>2.6) STATE._waveE=(STATE._waveE||0)+dtW*1.4;
-        if(dir!==0) STATE._wDir=dir;
-      }
-      STATE._wPrev={x:STATE.pointer.x,y:STATE.pointer.y,t:nowW};
-    } else { STATE._wPrev=null; STATE._wDir=undefined; }
+    // 2) 逗猫棒：判定已移到 pointermove 事件里（不依赖帧率，挥手立刻触发）
     // 能量衰减 + 触发
     STATE._waveE=Math.max(0,(STATE._waveE||0)-dtW*.28);
     if(STATE._waveE>=.50 && STATE.top==='engaged' && (STATE.danceCool||0)<=0
@@ -2998,23 +2986,60 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clock.stop(); else clock.start();
 });
 
-/* 鼠标兜底 */
+/* 鼠标兜底 + 逗猫棒挥动判定（事件驱动：不依赖帧率，挥手立刻响应） */
+const _tryWandDance=()=>{
+  if(STATE.inputMode!=='mouse') return;
+  if(STATE.top!=='engaged' || window.__CAM_BUSY) return;
+  if((STATE.danceCool||0)>0) return;
+  if(!(STATE.action==='idle'||STATE.action==='notice')) return;
+  STATE.action='dance'; STATE.actionT=0; STATE.actionCool=1.2;
+  STATE.danceCool=2.6; STATE._danceSide=(STATE._danceSide||1)*-1;
+  STATE._wSamples=[];
+  noteAct('手舞足蹈');
+};
 addEventListener('pointermove', e=>{
   STATE.pointer.x = e.clientX/innerWidth;
   STATE.pointer.y = e.clientY/innerHeight;
   STATE.pointer.t = clock.elapsedTime;
   STATE.pointer.active = true;
+  // —— 快速来回挥：0.7s 内 ≥3 次明显反向 + 累计行程 ≥0.12 → 立刻手舞足蹈
+  if(STATE.inputMode==='mouse'){
+    const now=performance.now()/1000;
+    const arr=STATE._wSamples||(STATE._wSamples=[]);
+    arr.push({t:now,x:STATE.pointer.x});
+    while(arr.length>24 || (arr.length && now-arr[0].t>0.9)) arr.shift();
+    let rev=0, travel=0, lastDir=0;
+    for(let i=1;i<arr.length;i++){
+      const dx=arr[i].x-arr[i-1].x;
+      if(Math.abs(dx)<0.018) continue;          // 忽略微小抖动
+      const d=Math.sign(dx); travel+=Math.abs(dx);
+      if(lastDir && d!==lastDir) rev++;
+      lastDir=d;
+    }
+    if(rev>=3 && travel>=0.12) _tryWandDance();
+  }
 });
-// 鼠标模式：在画面某处快速点击→猫朝该位置扑玩一下再退回（忽略按钮/面板上的点击）
+// 鼠标模式：快速单击（≤220ms 且几乎没移动）→ 猫朝该位置扑玩；按住拖拽/挥棒不触发
+let _clickDown=null;
 addEventListener('pointerdown', e=>{
   if(STATE.inputMode!=='mouse') return;
   if(e.target!==renderer.domElement) return;
+  _clickDown={x:e.clientX,y:e.clientY,t:performance.now()};
+});
+addEventListener('pointerup', e=>{
+  const d=_clickDown; _clickDown=null;
+  if(!d || STATE.inputMode!=='mouse') return;
+  if(e.target!==renderer.domElement) return;
+  const dt=performance.now()-d.t;
+  const moved=Math.hypot(e.clientX-d.x, e.clientY-d.y);
+  if(dt>240 || moved>14) return;                     // 拖拽/挥动 → 不算点击
   if(STATE.action==='pounce' || STATE.action==='stretch' || STATE.pounceCool>0) return;
+  if((STATE._waveRev||[]).length>=2) return;          // 正在挥棒 → 不抢动作
   STATE.pounceTarget.x=e.clientX/innerWidth;
   STATE.pounceTarget.y=e.clientY/innerHeight;
   STATE.clickPounce=true;
-  _wandJig=Math.min(.35, _wandJig+.18);   // 棒子被戳一下：快速抖动
-  _candyPulse=1;                          // 糖果瞬间放大 100%，随后回弹
+  _wandJig=Math.min(.35, _wandJig+.18);
+  _candyPulse=1;
 });
 
 /* 逗猫棒：棒尖跟随指针（带轻微重量感的平滑），细棍从右下屏外伸入到棒尖 */
@@ -3533,8 +3558,10 @@ startBtn.addEventListener('click', async ()=>{
   camErrEl.classList.remove('show');
   CatAudio.unlock();                    // 手势内尽早解锁音频，避免 await 后手势过期
 
-  // ① 同一次点击里先申请麦克风（语音常驻聆听），与摄像头权限并行发起
-  try{ if(window.__VOICE && window.__VOICE.start) window.__VOICE.start(); }catch(e){}
+  // ① 同一次点击里初始化离线语音（申请麦克风 + 后台加载 Vosk 模型，约 43MB，仅首次）
+  if(window.__VOICE && window.__VOICE.prepare){
+    window.__VOICE.prepare().catch(e=>console.warn('离线语音初始化失败', e));
+  }
 
   let loadTimer=null;
   try{
@@ -4169,260 +4196,158 @@ if(uHeadP && !_NO_MAT){
 }
 if(!_NO_MAT) applyTex();
 </script>
+<script src="./vendor/vosk/vosk.js"></script>
 <script type="module">
-/* ===== 微运镜（合并自 try_cam7）===== */
-
-
-
-
-
-// ===== 运镜 v5：自然触发 + 六处修正 =====
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let n=0; while(!(window.rig&&window.renderer&&window.scene&&window.camera) && n++<900) await sleep(100);
-if(window.rig&&window.renderer){
-const P={on:true, amp:0.72, ease:1.0};   // 幅度：×0.8 之后再降 10% = ×0.72
-const D=()=>((window.rig&&window.rig.camBase&&window.rig.camBase.dist)||0.59);
-const baseFov=window.camera.fov;
-const DUR={startle:1.6,pounce:1.5,paw:1.1,heart:2.6};
-const ev={startle:0,pounce:0,paw:0,heart:0};
-const fire=k=>{ ev[k]=DUR[k]; };
-let danceSide=1, prevAct='', prevStartle=0, prevPaw=0, lastEvent='—', lastEventT=0;
-const log=e=>{ lastEvent=e; lastEventT=performance.now(); };
-const smoothstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
-const cur={x:0,y:0,z:0,lookDy:0,shakeX:0,roll:0,fov:0};
-let tGlobal=0,lastT=0,shakeT=0,dtGlobal=0,lastTX=null,shakeE=0,shakeSide=1;
-
-function detect(dt){
-  const S=window.STATE||{};
-  const act=S.action||'';
-  if(act!==prevAct){
-    if(act==='pounce'){ fire('pounce'); log('扑玩→镜头后拉'); }
-    if(act==='dance'){ danceSide=-danceSide; log('跳舞→'+(danceSide<0?'左边':'右边')+'半环绕'); }
-    if(act==='stretch') log('伸懒腰→后拉弧线');
-    prevAct=act;
-  }
-  const st=S.startle||0;
-  if(st>0.5&&prevStartle<=0.5){ fire('startle'); log('惊讶→猛后拉'); }
-  prevStartle=st;
-  const pw=Math.max((S.pawLift&&S.pawLift.L)||0,(S.pawLift&&S.pawLift.R)||0);
-  if(pw>0.5&&prevPaw<=0.5){ fire('paw'); log('举爪→后仰'); }
-  prevPaw=pw;
-  // 爱心：懒绑定，音频模块可能晚加载
-  if(window.__sfxPlay && !window.__sfxWrapped){
-    const o=window.__sfxPlay;
-    window.__sfxPlay=function(name){ if(name==='heart'){ fire('heart'); log('爱心→希区柯克变焦'); } return o.apply(this,arguments); };
-    window.__sfxWrapped=true;
-  }
-}
-
-function target(){
-  const S=window.STATE||{}, d=D(), amp=P.amp, A=S.action||'', at=S.actionT||0;
-  const R=(A==='shake')?{nod:0,shake:0,side:1,nodT:99}:(window.__REACT||{nod:0,shake:0,side:1,nodT:99});
-  const hs=S.headSway||{yaw:0,pitch:0,roll:0};
-  const E=S.enjoy||0;
-  const o={x:0,y:0,z:0,lookDy:0,shakeX:0,roll:0,fov:0};
-  o.z += Math.sin(tGlobal*0.9)*0.004*d*amp;                        // 常态呼吸
-  // —— 猫的动作 ——
-  if(A==='walkIn'){ const k=Math.min(1,at/2.2); o.z-=d*0.30*amp*k; o.y-=d*0.050*amp*k; }
-  if(A==='sit'){ const k=Math.min(1,at/1.2); o.y-=d*0.14*amp*k; o.z+=d*0.04*amp*k; }
-  if(A==='stretch'){ const u=Math.min(1,at/3.2), arc=Math.sin(u*Math.PI);
-    o.z+=d*0.20*amp*arc; o.x+=(S._arcSign||1)*d*0.10*amp*arc; o.y+=d*0.03*amp*arc; o.lookDy-=0.006*amp*arc; }
-  if(A==='dance'){ const k=Math.sin(Math.min(1,at/0.8)*Math.PI*0.5);
-    const th=0.1745*Math.sin(at*Math.PI*2/2.6)*danceSide;     // 摆到 ±10° 就回来，不绕圈
-    o.x+=d*Math.sin(th)*amp*k*0.9; o.z-=d*(1-Math.cos(th))*amp*k;
-    o.y+=Math.sin(at*Math.PI*2*1.9)*d*0.018*amp*k;
-    o.lookDy+=Math.sin(at*Math.PI*2*1.9+0.9)*0.006*amp*k; }
-  if(A==='knead'){ const k=Math.sin(Math.min(1,at/0.9)*Math.PI*0.5); o.y-=d*0.07*amp*k; o.z-=d*0.15*amp*k; o.lookDy+=0.006*amp*k; }
-  if(A==='sniff'){ const k=Math.sin(Math.min(1,at/0.9)*Math.PI*0.5); o.z-=d*0.17*amp*k; o.y-=d*0.01*amp*k; }
-  // —— 猫的反应（事件）——
-  const p=k=>1-ev[k]/DUR[k];
-  // 扑玩：等猫冲到 55% 才开始后拉，95% 时到位，退步回收
-  if(A==='pounce'){ const e=smoothstep(0.55,0.95,at)*(1-smoothstep(1.20,1.70,at));
-    o.z+=d*0.30*amp*e; o.y+=d*0.045*amp*e; }
-  if(ev.paw>0){ const q=p('paw'), e=smoothstep(0,.22,q)*(1-smoothstep(.55,1,q));
-    o.z+=d*0.14*amp*e; o.y+=d*0.07*amp*e; o.roll+=0.030*amp*e; }
-  if(ev.startle>0){ const q=p('startle'), e=smoothstep(0,.16,q)*(1-smoothstep(.5,1,q));
-    o.z+=d*0.46*amp*e; o.y+=d*0.11*amp*e; o.roll+=Math.sin(q*54)*0.012*amp*e; }
-  // 惊讶之外的即时小反应：点头 / 摇头 / 时钟摆头
-  if(R.nod>0.02){ const a=R.nod, ph=Math.min(1,(R.nodT||0)/0.62);
-    o.lookDy-=0.055*a*amp*Math.sin(Math.PI*ph); o.y-=d*0.015*a*amp*Math.sin(Math.PI*ph); }
-  // 摇头：优先内部反应量（主文件每帧写 window.__REACT）；再用头骨偏航角速度兜底
-  {
-    const hb=window.rig&&window.rig.bones&&window.rig.bones['Bone004'];
-    if(hb){
-      const e=new THREE.Euler().setFromQuaternion(hb.quaternion,'YXZ');
-      const yaw=e.y;
-      if(lastTX!==null && dtGlobal>0.0005){
-        const rate=(yaw-lastTX)/dtGlobal;            // rad/s
-        if(Math.abs(rate)>1.7){ shakeE=Math.min(1,shakeE+Math.abs(rate)*0.16); shakeSide=rate>0?1:-1; }
-      }
-      lastTX=yaw;
-    }
-  }
-  shakeE*=Math.pow(0.10,dtGlobal);
-  const shk=Math.max(R.shake||0, shakeE), sd=(R.shake>0.02?(R.side||1):shakeSide);
-  if(shk>0.02){ shakeT+=0.016;
-    const ph=Math.sin(shakeT*Math.PI*2*4.2);
-    o.shakeX+=sd*d*0.12*shk*amp*ph; o.roll+=sd*0.028*shk*amp*ph; } else shakeT=0;
-  if(Math.abs(hs.roll)>0.02||Math.abs(hs.yaw)>0.02){                 // 时钟摆头
-    o.roll+=hs.roll*0.45*amp; o.shakeX+=hs.yaw*d*0.10*amp; o.lookDy+=hs.pitch*0.04*amp; }
-  // 抚摸 → 慢华尔兹轻摇（enjoy 或手遮脸都算，幅度加大）
-  const petAmt=Math.max(E, (S._handCover?0.85:0));
-  if(petAmt>0.06){ const w=tGlobal*0.62, e=Math.min(1,petAmt);
-    o.x+=Math.sin(w)*d*0.26*amp*e; o.roll+=Math.sin(w+0.55)*0.050*amp*e;
-    o.z-=d*0.10*amp*e; o.y+=Math.sin(w*2)*d*0.030*amp*e;
-    o.lookDy+=Math.sin(w+1.1)*0.012*amp*e; }
-  if(ev.heart>0){ const q=p('heart'), e=smoothstep(0,.26,q)*(1-smoothstep(.72,.92,q));
-    o.z+=d*0.30*amp*e; o.y+=d*0.02*amp*e;                 // 轻轻后拉，不切远景
-    o.fov-=6.0*amp*e;                                     // 轻微变焦
-    o.roll+=Math.sin(q*Math.PI*1.8)*0.016*amp*e; }
-  return o;
-}
-
-const orig=renderer.render.bind(renderer);
-renderer.render=(sc,cam)=>{
-  if(!P.on || sc!==window.scene){ orig(sc,cam); return; }
-  const now=performance.now()/1000, dt=Math.min(0.25, lastT?now-lastT:0.016); lastT=now; tGlobal+=dt; dtGlobal=Math.min(dt,0.2);
-  detect(dt);
-  for(const k in ev) if(ev[k]>0) ev[k]=Math.max(0,ev[k]-dt);
-  const tg=target(), kk=1-Math.exp(-dt*7.0*P.ease);
-  for(const key in cur) cur[key]+=((tg[key]||0)-cur[key])*kk;
-  // 运镜是否仍在进行（给动作调度用：运镜没结束不切下一个动作）
-  window.__CAM_BUSY=(Math.abs(cur.x)+Math.abs(cur.y)+Math.abs(cur.z)>0.004)
-    || ev.startle>0||ev.pounce>0||ev.paw>0||ev.heart>0;
-  const sp=new THREE.Vector3().copy(cam.position), sq=new THREE.Quaternion().copy(cam.quaternion), fv=cam.fov;
-  camera.position.x+=cur.x; camera.position.y+=cur.y; camera.position.z+=cur.z;
-  const cb=(window.rig&&window.rig.camBase)||{lx:0,ly:0.22,lz:0.14};
-  camera.lookAt(cb.lx+cur.shakeX, cb.ly+cur.lookDy, cb.lz);
-  camera.rotateZ(cur.roll);
-  if(Math.abs(cur.fov)>0.01){ camera.fov=baseFov+cur.fov; camera.updateProjectionMatrix(); }
-  orig(sc,cam);
-  camera.position.copy(sp); camera.quaternion.copy(sq);
-  if(Math.abs(cur.fov)>0.01){ camera.fov=fv; camera.updateProjectionMatrix(); }
-};
-
-window.__CAM={P,fire,ev,cur,danceSide:()=>danceSide,log,
-  get off(){return {dx:+cur.x.toFixed(3),dy:+cur.y.toFixed(3),dz:+cur.z.toFixed(3),lookDy:+cur.lookDy.toFixed(3),shakeX:+cur.shakeX.toFixed(3),roll:+cur.roll.toFixed(3),fov:+cur.fov.toFixed(2)};}};
-window.__CAM_CALC=(patch)=>{ const save={}; Object.assign(save,window.STATE||{}); Object.assign(window.STATE,patch||{});
-  const r=target(); for(const k in save) window.STATE[k]=save[k]; return r; };
-window.__CAM_READY=true;
-console.log('[cam5] ready');
-}
-
-
-
-
-
-</script>
-
-<script type="module">
-/* ===== 语音互动（常驻聆听版）：说「咪咪」走过来、说「坐下」坐下 ===== */
+/* ===== 语音互动（离线版 · 按住空格说话）：Vosk 本地识别，完全离线 ===== */
 (function(){
-  const V={supported:!!(window.SpeechRecognition||window.webkitSpeechRecognition), on:false, rec:null, lastText:'', lastIntent:'', log:[]};
+  const V={supported:true, listening:false, loading:false, ready:false, lastText:'', lastIntent:'', log:[], failed:null};
   window.__VOICE=V;
+  const MODEL_URL='./vosk_model/model.tar.gz';
 
-  /* HUD */
+  /* ---------- HUD ---------- */
   const hud=document.createElement('div');
   hud.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:9px;'
-    +'padding:9px 16px;border-radius:999px;background:rgba(18,20,26,.82);border:1px solid rgba(230,190,120,.30);'
-    +'color:#f3e6cf;font:13.5px/1.4 -apple-system,"PingFang SC",sans-serif;backdrop-filter:blur(6px);opacity:0;transition:opacity .25s;pointer-events:none';
-  hud.innerHTML='<span id="vDot" style="width:8px;height:8px;border-radius:50%;background:#7fd8a0;box-shadow:0 0 8px #7fd8a0"></span><span id="vTxt"></span>';
+    +'padding:8px 15px;border-radius:999px;background:rgba(18,20,26,.86);border:1px solid rgba(230,190,120,.28);'
+    +'color:#f3e6cf;font:13px/1.4 -apple-system,"PingFang SC",sans-serif;opacity:0;transition:opacity .22s;pointer-events:none';
+  hud.innerHTML='<span id="vDot" style="width:8px;height:8px;border-radius:50%;background:#e0a94b"></span><span id="vTxt"></span>';
   document.body.appendChild(hud);
   const vTxt=hud.querySelector('#vTxt'), vDot=hud.querySelector('#vDot');
   let hudTimer=0;
-  function say(msg, ms=2000, color='#e0a94b'){
+  function say(msg, ms=2400, color='#e0a94b', sticky=false){
     vTxt.textContent=msg; vDot.style.background=color; vDot.style.boxShadow='0 0 8px '+color;
     hud.style.opacity='1'; clearTimeout(hudTimer);
-    if(ms>0) hudTimer=setTimeout(()=>{ if(V.on && !V.listening) { hud.style.opacity='.55'; } else hud.style.opacity='0'; }, ms);
+    if(!sticky && ms>0) hudTimer=setTimeout(()=>{ hud.style.opacity='0'; }, ms);
   }
+  V.say=say;
 
-  /* 意图：只留 咪咪 / 坐下（长句包含也触发） */
+  /* ---------- 意图 ---------- */
   const INTENTS=[
-    {id:'come', words:['咪咪','小咪','咪咪呀'], desc:'走过来'},
-    {id:'sit',  words:['坐下','坐好','坐'],      desc:'坐下'},
+    {id:'come', words:['咪咪','小猫咪','小咪','喵喵','喵','猫猫'], desc:'走过来'},
+    {id:'sit',  words:['坐下','坐好','坐'],                        desc:'坐下'},
   ];
   const norm=t=>(t||'').replace(/[\s，。！？、,.!?~～·—…"“”'‘’]/g,'').toLowerCase();
   function match(text){
     const n=norm(text); if(!n) return null;
     let hit=null, len=0;
-    for(const it of INTENTS) for(const w of it.words){
-      if(n.includes(w) && w.length>len){ hit=it; len=w.length; }
-    }
+    for(const it of INTENTS) for(const w of it.words){ if(n.includes(w)&&w.length>len){ hit=it; len=w.length; } }
     return hit;
   }
-
   const cool={};
   function fire(it){
     const now=performance.now()/1000;
-    if(cool[it.id] && now-cool[it.id]<3.2){ return; }
-    cool[it.id]=now;
-    V.lastIntent=it.id; V.log.push({t:+now.toFixed(1), id:it.id});
-    if(window.__sfxNote){ try{ window.__sfxNote(it.desc); }catch(e){} }
+    if(cool[it.id] && now-cool[it.id]<2.6) return;
+    cool[it.id]=now; V.lastIntent=it.id; V.log.push({t:+now.toFixed(1),id:it.id});
     if(it.id==='come'){
       if(!STATE.entered && window.__enterMain) window.__enterMain();
       else if(STATE.top!=='engaged'){ STATE.top='engaged'; STATE.hasJoined=false; STATE.action='walkIn'; STATE.actionT=0; }
       else { STATE.action='notice'; STATE.actionT=0; STATE.noticeT=0; STATE.moveZ+=(0.115-STATE.moveZ)*0.35; }
       STATE.actionCool=1.4;
-    } else if(it.id==='sit'){
+    } else {
       STATE.action='sit'; STATE.actionT=0; STATE.actionDur=3.4; STATE.actionCool=2.4;
     }
-    say('🐱 '+it.desc, 2000);
+    say('🐱 '+it.desc, 1800, '#c9e8a8');
   }
+  V.fire=t=>{ const it=match(t); if(it) fire(it); return it?it.id:null; };
+  V.match=match;
 
-  /* 常驻识别：continuous + 自动重启 */
-  let restartTimer=0;
-  function start(){
-    if(!V.supported){ say('当前浏览器不支持语音识别', 4000, '#e07070'); return; }
-    if(V.on && V.rec){ V.listening=true; say('语音已开启，一直听着呢', 2200, '#7fd8a0'); return; }
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    const rec=new SR(); V.rec=rec;
-    rec.lang='zh-CN'; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=2;
-    rec.onstart=()=>{ V.on=true; V.listening=true; say('🎙 语音已开启，说「咪咪」或「坐下」', 2600, '#7fd8a0'); };
-    rec.onresult=(e)=>{
-      for(let i=e.resultIndex;i<e.results.length;i++){
-        const r=e.results[i];
-        if(r.isFinal){
-          const txt=r[0].transcript.trim();
-          V.lastText=txt;
-          const it=match(txt);
-          if(it) fire(it);
-        }
-      }
-    };
-    rec.onerror=(e)=>{
-      if(e.error==='not-allowed'||e.error==='service-not-allowed'){
-        V.on=false; say('麦克风权限被拒绝：点地址栏左侧的麦克风图标允许后刷新', 5000, '#e07070');
-      } else if(e.error==='no-speech'){ /* 正常静默，忽略 */ }
-      else if(e.error==='network'){ say('语音识别需要联网（国内需科学上网）', 4000, '#e07070'); }
-    };
-    rec.onend=()=>{
-      V.listening=false;
-      if(V.on){ clearTimeout(restartTimer); restartTimer=setTimeout(()=>{ try{ rec.start(); }catch(err){} }, 350); }
-    };
-    try{ rec.start(); V.on=true; }catch(e){ say('启动失败：'+e.message, 3000, '#e07070'); }
-  }
-  function stop(){
-    V.on=false; clearTimeout(restartTimer);
-    try{ V.rec && V.rec.stop(); }catch(e){}
-    hud.style.opacity='0';
-  }
-  V.start=start; V.stop=stop; V.fire=(t)=>{ const it=match(t); if(it) fire(it); return it?it.id:null; };
+  /* ---------- 模型 / 麦克风 ---------- */
+  let model=null, rec=null, ctx=null, node=null, src=null, stream=null;
+  let armed=false, held=false, lastPartial='';
 
-  /* 前置页按钮 */
-  function bind(){
-    const btn=document.getElementById('voiceBtn');
-    if(btn){ btn.addEventListener('click', ()=>{ start(); if(window.__enterMain) window.__enterMain(); }); }
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
-
-  /* 快捷键：V 开关语音（不占用 G，G 留给以后扩展） */
-  addEventListener('keydown',e=>{
-    if((e.key==='v'||e.key==='V') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat){
-      if(V.on) stop(); else start();
+  async function ensureModel(){
+    if(model || V.loading) return;
+    if(typeof Vosk==='undefined'){
+      V.failed='lib';
+      say('离线语音组件没加载到（vendor/vosk/vosk.js 缺失或没上传）', 9000, '#e07070');
+      throw new Error('Vosk 未加载');
     }
-  });
-  console.log('[VOICE] ready', {supported:V.supported});
+    V.loading=true;
+    say('正在加载离线语音模型（约 43MB，仅首次）…', 0, '#e0a94b', true);
+    const t0=performance.now();
+    try{
+      model=await Vosk.createModel(MODEL_URL);
+    }catch(err){
+      V.loading=false; V.failed='model';
+      say('识别模型加载失败：检查 vosk_model/model.tar.gz 是否上传', 9000, '#e07070');
+      throw err;
+    }
+    rec=new model.KaldiRecognizer();
+    rec.on('result',(m)=>{
+      const t=(m.result && m.result.text)||''; V.lastText=t; lastPartial='';
+      if(!held) return;
+      const it=match(t);
+      if(it) fire(it); else if(t) say('没听清：'+t, 1800, '#e0a94b');
+    });
+    rec.on('partialresult',(m)=>{
+      const t=(m.result && m.result.partial)||''; if(t) lastPartial=t;
+    });
+    V.loading=false; V.ready=true;
+    say('离线语音就绪（'+(Math.round((performance.now()-t0)/100)/10)+'s）· 按住空格说话', 3200, '#7fd8a0');
+  }
+
+  async function ensureAudio(){
+    if(ctx && stream && stream.active) return;
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      V.failed='mic'; say('这个浏览器不支持麦克风，请用 Chrome / Edge', 8000, '#e07070'); throw new Error('no getUserMedia');
+    }
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,channelCount:1}});
+    }catch(err){
+      V.failed='mic';
+      say('麦克风被拒绝：点地址栏左侧的麦克风图标允许后刷新', 9000, '#e07070');
+      throw err;
+    }
+    ctx=new AudioContext({sampleRate:16000});
+    node=ctx.createScriptProcessor(4096,1,1);
+    node.onaudioprocess=(e)=>{ if(!rec || !held) return; try{ rec.acceptWaveform(e.inputBuffer); }catch(err){} };
+    src=ctx.createMediaStreamSource(stream);
+    src.connect(node); node.connect(ctx.destination);
+  }
+
+  /* 入口点击时调用：预加载模型 + 申请麦克风（同一次点击手势内） */
+  async function prepare(){
+    try{
+      await ensureModel();
+      await ensureAudio();
+      say('🎙 按住空格说话：说「咪咪」或「坐下」', 4000, '#7fd8a0');
+      return true;
+    }catch(e){ return false; }
+  }
+  V.prepare=prepare;
+
+  async function startListen(){
+    if(armed) return;
+    if(!V.ready){ say(V.loading?'语音还在加载，稍等一下…':'语音未就绪：先点一次「进入猫窝」', 2600, '#e0a94b'); return; }
+    try{ await ensureAudio(); }catch(e){ return; }
+    armed=true; held=true; lastPartial='';
+    V.listening=true; say('🎙 正在听… 说完松开空格', 0, '#7fd8a0', true);
+  }
+  function stopListen(){
+    if(!held) return;
+    held=false;
+    if(rec){
+      try{ rec.retractPartial(); }catch(e){}
+      // 有些短句不会触发 result：用一个空缓冲收尾后再用 partial 兜底匹配
+      try{ rec.acceptWaveform(new AudioBuffer({length:1,numberOfChannels:1,sampleRate:16000})); }catch(e){}
+    }
+    if(lastPartial){ const it=match(lastPartial); if(it) fire(it); lastPartial=''; }
+    if(armed){ armed=false; V.listening=false; say('按住空格说话', 1600, '#e0a94b'); }
+  }
+  V.start=startListen; V.stop=stopListen;
+
+  addEventListener('keydown', e=>{
+    if(e.code!=='Space' || e.repeat) return;
+    const t=e.target; if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
+    if(!STATE.entered) return;
+    e.preventDefault(); startListen();
+  }, {passive:false});
+  addEventListener('keyup', e=>{ if(e.code!=='Space' || !held) return; e.preventDefault(); stopListen(); }, {passive:false});
+  addEventListener('blur', ()=>{ if(held) stopListen(); });
+
+  console.log('[VOICE-OFFLINE] module ready, Vosk='+(typeof Vosk));
 })();
 </script>
+
+
 </body>
 </html>
