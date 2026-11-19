@@ -4158,7 +4158,7 @@ if(!_NO_MAT) applyTex();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let n=0; while(!(window.rig&&window.renderer&&window.scene&&window.camera) && n++<900) await sleep(100);
 if(window.rig&&window.renderer){
-const P={on:true, amp:0.8, ease:1.0};   // 幅度统一 ×0.8
+const P={on:true, amp:0.72, ease:1.0};   // 幅度：×0.8 之后再降 10% = ×0.72
 const D=()=>((window.rig&&window.rig.camBase&&window.rig.camBase.dist)||0.59);
 const baseFov=window.camera.fov;
 const DUR={startle:1.6,pounce:1.5,paw:1.1,heart:2.6};
