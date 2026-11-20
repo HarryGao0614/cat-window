@@ -9,7 +9,7 @@
 <link rel="preload" href="./cat_models/face_landmarker.task" as="fetch" crossorigin>
 <link rel="preload" href="./cat_models/hand_landmarker.task" as="fetch" crossorigin>
 <link rel="preload" href="./cat_audio/purr.mp3" as="audio">
-<link rel="preload" href="./cat_audio/music.mp3" as="audio">
+<link rel="preload" href="./cat_audio/bgm_serendipity.m4a" as="audio">
 <style>
   :root{
     --warm-white:#e9e1d6;
@@ -2942,18 +2942,16 @@ const D=.09*c + SITT.D*s;
 /* ================= 背景音乐与呼噜声（HTMLAudioElement 直连外部 mp3，见 CatAudio） ================= */
 const CatAudio=(()=>{
   let unlocked=false, musicEnabled=true, built=false;   // 背景音乐默认打开
-  let musicEl=null, purrEl=null;
+  let musicEl=null, purrEl=null, duck=1, duckT=0;   // duck：音效播放时压低背景音乐
   // 程序化氛围音乐（WebAudio 合成：柔和垫音 + 偶发铃声 + 混响，无外部音频、无版权问题）
   let ac=null, ambMaster=null, ambBuilt=false;
   // 直接用 HTMLAudioElement，不经过 Web Audio 图，避免上下文挂起/手势过期导致无声
   function build(){
     if(built) return;
-    // ---- 背景音乐：优先程序化氛围（见 buildAmbient）；不可用时回退到 mp3 ----
-    ambBuilt=buildAmbient();
-    if(!ambBuilt){
-      musicEl=new Audio('./cat_audio/music.mp3');
-      musicEl.loop=true; musicEl.preload='auto'; musicEl.volume=0;
-    }
+    // ---- 背景音乐：Serendipity（PurrpleCat / Pixabay License，可商用、免署名）----
+    ambBuilt=false;                                   // 不再使用程序化氛围，直接用真实曲目
+    musicEl=new Audio('./cat_audio/bgm_serendipity.m4a');
+    musicEl.loop=true; musicEl.preload='auto'; musicEl.volume=0;
     // ---- 真实猫呼噜录音（BigSoundBank CC0，循环），无开关、随享受/伸懒腰自动强弱 ----
     purrEl=new Audio('./cat_audio/purr.mp3');
     purrEl.playbackRate=0.75;   // 呼噜慢放 0.75 倍（降低速度与音高，更慵懒）
@@ -3020,7 +3018,9 @@ const CatAudio=(()=>{
     const purrTarget=(.25+.75*p)*.72*.95*.85*.50*fade;  // 呼噜再降 30%，随 walkIn 渐入
     purrEl.volume+=(purrTarget-purrEl.volume)*Math.min(1,dt*6);
     if(purrEl.paused) tryPlay(purrEl);
-    const mt=(musicEnabled?.46:0)*fade;         // 音乐也随 walkIn 渐入，选模式瞬间不出声
+    // 音效响起时压低音乐（ducking）：0.55s 内保持 42%，之后缓慢恢复
+    if(duckT>0){ duckT-=dt; duck=0.42; } else { duck+=(1-duck)*Math.min(1,dt*2.0); }
+    const mt=(musicEnabled?.42:0)*fade*duck;    // 音乐随 walkIn 渐入 + 音效闪避
     if(ambBuilt && ambMaster){
       ambMaster.gain.setTargetAtTime(mt, ac.currentTime, .6);   // 环境混音（垫音已删，不再额外增益）
     } else if(musicEl){
@@ -3037,7 +3037,9 @@ const CatAudio=(()=>{
         ? {procedural:true, gain:+(ambMaster?ambMaster.gain.value:0).toFixed(3)}
         : {paused:musicEl.paused,currentTime:+musicEl.currentTime.toFixed(2),volume:+musicEl.volume.toFixed(3)}};
   }
-  return {unlock, toggleMusic, update, diag, get musicEnabled(){return musicEnabled;}, get unlocked(){return unlocked;}};
+  function duckMusic(sec=0.55){ duckT=Math.max(duckT,sec); }
+  return {unlock, toggleMusic, update, diag, duckMusic,
+    get musicEnabled(){return musicEnabled;}, get unlocked(){return unlocked;}};
 })();
 window.CatAudio=CatAudio;   // 调试钩子，便于自检音频元素状态
 
@@ -3986,6 +3988,8 @@ boot();
   }
   function play(name,t){
     if(!BUF[name]) return false;
+    // 音效响起时压低背景音乐（ducking）
+    if(window.CatAudio && window.CatAudio.duckMusic){ try{ window.CatAudio.duckMusic(0.45); }catch(e){} }
     const s=ac.createBufferSource(); s.buffer=BUF[name];
     const g=ac.createGain(); g.gain.value=FILE_GAIN[name]||1;
     s.connect(g); g.connect(master); s.start(t); return true;
