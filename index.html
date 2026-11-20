@@ -3798,10 +3798,22 @@ async function ensureDetectionWithin(ms){
   try{ await Promise.race([ensureDetection(), timeout]); }
   finally{ if(timer) clearTimeout(timer); }
 }
+/* 切换输入模式时重置互动状态：
+   摄像头会话里攒下的 sessT/overstim/coolT（强制休息 5s）会让猫刚切过去时
+   对逗猫棒毫无反应，看起来像"卡 5 秒"。这里直接收尾会话、清空冷却。 */
+function resetSessionForModeSwitch(){
+  STATE.sessT=0; STATE.overstim=0; STATE.coolT=0; STATE.gazeT=-1;
+  if(STATE.entered && STATE.action!=='walkIn'){
+    STATE.top='free'; STATE.action='idle'; STATE.actionT=0;
+    STATE.actionCool=0.3;          // 立刻可被逗猫棒/表情唤起
+    resetStanceAnchors();
+  }
+}
 modeMouseBtn.addEventListener('click', ()=>{
   if(STATE.inputMode==='mouse') return;
   STATE.inputMode='mouse';
   if(STATE.camOn) suspendCamera();          // 只暂停，12 秒内切回可秒开
+  resetSessionForModeSwitch();
   syncModeUI();
 });
 modeCamBtn.addEventListener('click', async ()=>{
@@ -3809,6 +3821,7 @@ modeCamBtn.addEventListener('click', async ()=>{
   modeCamBtn.disabled=true;
   try{
     STATE.inputMode='camera'; syncModeUI();
+    resetSessionForModeSwitch();             // 切回摄像头也重置会话，避免旧冷却
     if(resumeCamera()) return;               // 12 秒内切回：直接恢复，无需重新打开摄像头
     await startCamera();
     await ensureDetection();
@@ -4443,10 +4456,10 @@ if(!_NO_MAT) applyTex();
     } else if(it.id==='sit'){
       STATE.action='sit'; STATE.actionT=0; STATE.actionDur=3.4; STATE.actionCool=2.4;
     } else if(it.id==='show'){
-      // 「展示」：随机秀一个 —— 伸懒腰 / 手舞足蹈 / 爱心（避开与上次相同）
-      const pool=['stretch','dance','heart'];
-      let pick=pool[(Math.random()*pool.length)|0];
-      if(pick===V._lastShow){ pick=pool[(pool.indexOf(pick)+1+((Math.random()*2)|0))%3]; }
+      // 「展示」：三种轮换（伸懒腰 → 手舞足蹈 → 爱心 → …），不会连续重复
+      const order=['stretch','dance','heart'];
+      V._showIdx=(typeof V._showIdx==='number')?(V._showIdx+1)%order.length:0;
+      const pick=order[V._showIdx];
       V._lastShow=pick;
       if(pick==='stretch'){
         STATE.action='stretch'; STATE.actionT=0; STATE.actionCool=3.7;
