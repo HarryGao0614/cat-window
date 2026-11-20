@@ -388,6 +388,55 @@
   }
   #gate #gateActions .hint strong{color:#e2cba4;font-weight:600}
   #startBtn{font-size:14.5px;letter-spacing:.22em;padding:15px 44px}
+  /* ===== 前置页中部文案 v2：更柔和的气质（覆盖上一版） ===== */
+  #gate .gateMust{
+    padding:9px 24px 9px 20px;gap:10px;margin:5px 0 9px;
+    border:1px solid rgba(233,196,135,.28);border-radius:999px;
+    background:linear-gradient(90deg,rgba(233,196,135,.11),rgba(233,196,135,.02) 70%);
+    box-shadow:0 6px 22px rgba(0,0,0,.22),0 0 0 1px rgba(255,244,220,.04) inset;
+    font-size:clamp(13.2px,1.1vw,14.8px);letter-spacing:.07em;color:#eed9b2;
+  }
+  #gate .gateMust .mustIcon{
+    font-size:14px;line-height:1;transform:translateY(-1px);
+    filter:saturate(.85) brightness(1.02);
+  }
+  #gate .gateMust strong{color:#ffe9c4;font-weight:600;letter-spacing:.1em}
+  #gate .gateBrowser{
+    font-size:10.5px;letter-spacing:.16em;color:#9d8f79;margin:0 0 26px;
+  }
+  #gate .gateBrowser strong{color:#d9c3a0;font-weight:500}
+  #gate p.pitch{
+    font-size:clamp(17px,1.5vw,21px);line-height:1.9;letter-spacing:.12em;
+    color:#f8eedd;margin:0 0 4px;
+  }
+  #gate p.pitch strong{letter-spacing:.18em;color:#fff2d6;font-weight:600}
+  #gate p.desc{
+    font-size:clamp(12.8px,1vw,14px);line-height:2.15;letter-spacing:.07em;
+    color:#bdb09b;margin:0 0 6px;max-width:680px;
+  }
+  #gate .hair{
+    width:150px;height:1px;margin:16px auto 20px;
+    background:linear-gradient(90deg,transparent,rgba(233,196,135,.42),transparent);
+    animation:magIn 1.05s both .46s;
+  }
+  #gate ul.plays{
+    display:flex;flex-direction:column;gap:9px;align-items:center;text-align:center;
+    margin:0 0 28px;font-size:clamp(12.6px,1vw,13.8px);line-height:1.9;letter-spacing:.05em;
+  }
+  #gate ul.plays li{display:flex;align-items:baseline;gap:9px}
+  #gate ul.plays b{
+    flex:0 0 auto;color:#e8cb96;font-weight:600;letter-spacing:.18em;
+  }
+  #gate ul.plays i{font-style:normal;color:#7f7360;letter-spacing:0}
+  #gate ul.plays span{color:#b9ac97;letter-spacing:.05em}
+  #gate #gateActions .hint{
+    font-size:11px;letter-spacing:.07em;color:#a2957f;line-height:1.95;margin-top:15px;max-width:560px;
+  }
+  #gate #gateActions .hint strong{color:#ddc7a3}
+  #startBtn{
+    font-size:14.5px;letter-spacing:.32em;padding:16px 46px;border-radius:40px;
+    box-shadow:0 8px 26px rgba(0,0,0,.28),0 0 0 1px rgba(255,240,210,.10) inset;
+  }
   /* 标题字号统一（大屏略大，避免不同窗口差距过大） */
   #gate h2{font-size:clamp(32px,3.4vw,44px);letter-spacing:.24em;margin:0 0 2px}
   #gate .divider{width:210px}
@@ -398,9 +447,10 @@
     #gate .divider{margin:8px 0 12px}
     #gate .gateMust{margin:2px 0 6px}
     #gate .gateBrowser{margin-bottom:16px}
-    #gate p.pitch{margin-bottom:6px;font-size:18px}
-    #gate p.desc{margin-bottom:15px;line-height:1.9}
-    #gate ul.plays{gap:4px;margin-bottom:18px;line-height:1.6}
+    #gate p.pitch{margin-bottom:4px;font-size:18px}
+    #gate p.desc{margin-bottom:4px;line-height:1.95}
+    #gate .hair{margin:10px auto 14px}
+    #gate ul.plays{gap:5px;margin-bottom:20px;line-height:1.7}
     #startBtn{padding:13px 40px}
     #gate #gateActions .hint{margin-top:10px;line-height:1.75}
   }
@@ -643,25 +693,26 @@
   <div class="divider"><i></i><span>MEOW</span><i></i></div>
 
   <div class="gateMust">
-    <span class="mustTag">必读</span>
-    <span class="mustText">请先开启<strong>科学上网</strong>，否则模型与语音无法加载</span>
+    <span class="mustIcon" aria-hidden="true">💡</span>
+    <span class="mustText">国内网络请先开启<strong>科学上网</strong>，模型和语音才加载得动</span>
   </div>
-  <div class="gateBrowser">推荐使用 <strong>Chrome</strong> / <strong>Edge</strong> 浏览器</div>
+  <div class="gateBrowser">推荐使用 <strong>Chrome</strong> / <strong>Edge</strong> 打开，会更顺一些</div>
 
-  <p class="pitch"><strong>网页猫猫</strong>，让你在工位上拥有一只自己的 3D 宠物。</p>
-  <p class="desc">它会在猫窝里踱步、打盹、伸懒腰，也会被你的表情、手势和声音逗得回应你。</p>
+  <p class="pitch">在浏览器里，养一只<strong>属于你</strong>的小猫。</p>
+  <p class="desc">它会在窗边的猫窝里踱步、打盹、伸懒腰；你笑一笑、招招手、说句话，它都会回应你。</p>
+  <div class="hair" aria-hidden="true"></div>
   <ul class="plays">
-    <li><b>看猫猫</b><span>打开摄像头，它会跟着你的脸和手看</span></li>
-    <li><b>说说话</b><span>按住空格说「咪咪」「坐下」「展示」</span></li>
-    <li><b>逗猫棒</b><span>切到逗猫棒模式，用鼠标陪它玩</span></li>
+    <li><b>看猫猫</b><i>·</i><span>打开摄像头，它会循着你的脸和手看过来</span></li>
+    <li><b>说说话</b><i>·</i><span>按住空格唤一声「咪咪」，它会凑近闻闻你</span></li>
+    <li><b>逗猫棒</b><i>·</i><span>切到逗猫棒模式，用鼠标陪它玩一会儿</span></li>
   </ul>
 
-  <div id="preloadHint" class="hint">⏳ 正在加载场景与猫咪模型，按钮稍后出现</div>
+  <div id="preloadHint" class="hint">⏳ 正在为小猫点灯，稍等片刻…</div>
   <div id="gateActions">
-    <button id="startBtn">授权进入猫窝</button>
-    <div class="hint">一次授权，同时开启摄像头与麦克风；数据都在浏览器本地处理，不会上传。</div>
-    <div class="hint" id="loadHint">首次进入需下载约 15&nbsp;MB 识别模型，请等 10~30 秒。<br>
-    若点完没有反应，请在地址栏允许摄像头与麦克风，然后刷新重试。</div>
+    <button id="startBtn">推门进猫窝</button>
+    <div class="hint">一次授权，摄像头与麦克风同时开启；画面和声音都在你的浏览器里处理，不会上传。</div>
+    <div class="hint" id="loadHint">第一次进屋要等一小会儿：约 15&nbsp;MB 的识别模型正在下载，通常 10~30 秒。<br>
+    若点了没动静，多半是权限被拦住了——请在地址栏允许摄像头与麦克风，再刷新重试。</div>
   </div>
   <p id="camErr" role="alert"></p>
   <div class="issue">ISSUE 01 · 网页猫猫 · MMXXVI</div>
@@ -3716,7 +3767,7 @@ startBtn.addEventListener('click', async ()=>{
   }finally{
     if(loadTimer) clearInterval(loadTimer);
     startBtn.disabled = false;
-    startBtn.textContent = '授权进入猫窝';
+    startBtn.textContent = '推门进猫窝';
   }
 });
 /* 逗猫棒入口按钮已移除：进入主界面统一由「开启摄像头 / 开启语音」触发 */
