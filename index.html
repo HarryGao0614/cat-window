@@ -335,9 +335,93 @@
     #pip{width:104px;height:78px;right:16px;bottom:118px}
     #gate h2{font-size:25px}
   }
+  /* 前置页期间先隐藏界面，进入后再淡入（避免文字叠在一起） */
+  body.inGate header, body.inGate #inputToggle, body.inGate #toolbar,
+  body.inGate #guide, body.inGate #panel{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
+  header, #inputToggle, #toolbar, #guide, #panel{ transition:opacity .35s ease; }
+  /* ===== 前置页中部文案（本次新增排版，其他元素不动） ===== */
+  #gate .gateMust{
+    display:inline-flex;align-items:center;gap:9px;
+    margin:4px 0 8px;padding:7px 15px 7px 10px;
+    border:1px solid rgba(233,196,135,.34);border-radius:3px;
+    background:linear-gradient(90deg,rgba(233,196,135,.13),rgba(233,196,135,.03));
+    font-family:"Songti SC","STSong",Georgia,serif;
+    font-size:clamp(13px,1.12vw,15px);letter-spacing:.05em;color:#f7dcae;
+    animation:magIn 1s cubic-bezier(.2,.7,.2,1) both .26s;
+  }
+  #gate .gateMust .mustTag{
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:9.5px;letter-spacing:.26em;
+    color:#1c1510;background:#e9c487;border-radius:2px;padding:2px 7px 1px;font-weight:700;
+  }
+  #gate .gateMust strong{color:#fff1d4;font-weight:700}
+  #gate .gateBrowser{
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:11px;letter-spacing:.12em;
+    color:#a99a80;margin:0 0 24px;animation:magIn 1s both .30s;
+  }
+  #gate .gateBrowser strong{color:#e2cba4;font-weight:600}
+  #gate p.pitch{
+    margin:0 0 10px;max-width:600px;
+    font-family:"Songti SC","STSong",Georgia,serif;font-size:clamp(16px,1.5vw,20px);
+    line-height:1.8;letter-spacing:.06em;color:#f6ead6;
+    animation:magIn 1.05s cubic-bezier(.2,.7,.2,1) both .36s;
+  }
+  #gate p.pitch strong{font-weight:600;color:#fff2d8;letter-spacing:.12em}
+  #gate p.desc{
+    margin:0 0 22px;max-width:560px;
+    font-family:"Songti SC","STSong",Georgia,serif;font-size:clamp(12.8px,1.02vw,14.2px);
+    line-height:2.05;letter-spacing:.06em;color:#c2b49e;
+    animation:magIn 1.05s cubic-bezier(.2,.7,.2,1) both .42s;
+  }
+  #gate ul.plays{
+    list-style:none;margin:0 0 26px;padding:0;
+    display:inline-flex;flex-direction:column;gap:7px;text-align:left;
+    font-family:"Songti SC","STSong",Georgia,serif;font-size:clamp(12.5px,1vw,14px);
+    line-height:1.7;letter-spacing:.05em;color:#cabdab;
+    animation:magIn 1.05s cubic-bezier(.2,.7,.2,1) both .48s;
+  }
+  #gate ul.plays li{display:flex;align-items:baseline;gap:12px}
+  #gate ul.plays b{flex:0 0 5.4em;color:#eccf9a;font-weight:600;letter-spacing:.14em}
+  #gate ul.plays span{flex:1}
+  #gate #gateActions .hint{
+    font-family:"Helvetica Neue",Arial,sans-serif;font-size:11px;letter-spacing:.06em;
+    color:#9c8f7a;line-height:1.9;margin-top:14px;max-width:520px;
+  }
+  #gate #gateActions .hint strong{color:#e2cba4;font-weight:600}
+  #startBtn{font-size:14.5px;letter-spacing:.22em;padding:15px 44px}
+  /* 标题字号统一（大屏略大，避免不同窗口差距过大） */
+  #gate h2{font-size:clamp(32px,3.4vw,44px);letter-spacing:.24em;margin:0 0 2px}
+  #gate .divider{width:210px}
+  /* 矮屏紧凑：保证一屏装得下（不改其它元素） */
+  @media (max-height:840px){
+    #gate .kicker{margin-bottom:12px}
+    #gate h2{font-size:clamp(28px,3.6vw,40px)}
+    #gate .divider{margin:8px 0 12px}
+    #gate .gateMust{margin:2px 0 6px}
+    #gate .gateBrowser{margin-bottom:16px}
+    #gate p.pitch{margin-bottom:6px;font-size:18px}
+    #gate p.desc{margin-bottom:15px;line-height:1.9}
+    #gate ul.plays{gap:4px;margin-bottom:18px;line-height:1.6}
+    #startBtn{padding:13px 40px}
+    #gate #gateActions .hint{margin-top:10px;line-height:1.75}
+  }
+  @media (max-height:720px){
+    #gate .kicker{margin-bottom:8px}
+    #gate p.desc{font-size:12.5px;line-height:1.8;margin-bottom:12px}
+    #gate ul.plays{margin-bottom:14px}
+    #gate .gateBrowser{margin-bottom:12px}
+    #gate #gateActions .hint{font-size:10.5px}
+  }
+  @media (max-width:640px){
+    #gate .gateMust{font-size:12.5px;padding:6px 12px 6px 9px}
+    #gate p.pitch{font-size:16px;line-height:1.7;letter-spacing:.04em}
+    #gate p.desc{font-size:12.5px;line-height:1.9}
+    #gate ul.plays{font-size:12px;gap:5px;margin-bottom:22px}
+    #gate ul.plays b{flex-basis:4.6em;letter-spacing:.08em}
+    #startBtn{padding:13px 34px}
+  }
 </style>
 </head>
-<body>
+<body class="inGate">
 <div id="ambient"></div>
 <div id="app"></div>
 
@@ -395,34 +479,34 @@
     <span class="gt">互动指南</span><span class="gchev">▾</span>
   </div>
   <div id="guideBody">
-    <h4>语音（按住空格说话）</h4>
+    <h4>语音 · 按住空格说话</h4>
     <ul>
-      <li><b>咪咪</b>（小猫咪 / 小咪 / 喵 / 喵喵 / 猫猫）：猫咪凑近闻闻你</li>
-      <li><b>坐下</b>（坐 / 坐好 / 快坐下）：猫咪乖乖坐下</li>
-      <li><b>展示</b>（秀一下 / 跳一个 / 动一动 / 露一手 / 表演一个）：随机表演一个（伸懒腰 / 手舞足蹈 / 爱心）</li>
+      <li><b>咪咪</b>（小猫咪 / 小咪 / 喵喵 / 猫猫）：走过来闻闻你</li>
+      <li><b>坐下</b>（坐好 / 快坐下）：乖乖坐下</li>
+      <li><b>展示</b>（秀一下 / 跳一个 / 动一动）：随机表演：伸懒腰、手舞足蹈或爱心</li>
     </ul>
-    <h4>看猫猫模式 · 人脸</h4>
+    <h4>看猫猫 · 人脸</h4>
     <ul>
-      <li><b>微笑</b>：猫咪走近镜头，凑近闻一闻</li>
-      <li><b>摇头</b>：猫咪抖抖耳朵，往一侧轻瞟</li>
-      <li><b>时钟摆头</b>：猫咪跟着你一起摆头</li>
-      <li><b>张嘴</b>：猫咪惊讶地睁大眼睛，像被吓了一跳</li>
+      <li><b>微笑</b>：凑近镜头，闻一闻</li>
+      <li><b>摇头</b>：抖抖耳朵，往一侧轻瞟</li>
+      <li><b>左右摆头</b>：跟着你一起摆头</li>
+      <li><b>张嘴</b>：被吓一跳，睁大眼睛</li>
     </ul>
-    <h4>看猫猫模式 · 手势</h4>
+    <h4>看猫猫 · 手势</h4>
     <ul>
-      <li><b>面对镜头击掌</b>：猫咪举爪对掌</li>
-      <li><b>抚摸镜头</b>：手掌缓慢靠近镜头，猫咪眯眼放松，像被抚摸</li>
+      <li><b>面对镜头击掌</b>：举爪对掌</li>
+      <li><b>手掌贴近镜头</b>：眯眼放松，像被抚摸</li>
     </ul>
-    <h4>逗猫棒模式</h4>
+    <h4>逗猫棒</h4>
     <ul>
-      <li><b>快速来回挥动</b>：猫咪开心地手舞足蹈</li>
-      <li><b>快速点击</b>：棒子抖一下，猫咪朝点击处扑玩再退回</li>
+      <li><b>快速来回挥动</b>：手舞足蹈</li>
+      <li><b>快速点击</b>：朝点击处扑一下</li>
     </ul>
     <h4>通用</h4>
     <ul>
-      <li><b>右上角</b>：随时切换看猫猫 / 逗猫棒</li>
-      <li><b>H 键</b>或标题下方按钮：一键收起 / 显示面板</li>
-      <li><b>视线标定</b>：九点校准更准，也可以跳过</li>
+      <li><b>右上角</b>：切换看猫猫 / 逗猫棒（切走时摄像头暂停，12 秒内切回可秒开）</li>
+      <li><b>H 键</b>或标题下方按钮：收起 / 显示面板</li>
+      <li><b>视线标定</b>：九点校准，眼神更准（可跳过）</li>
     </ul>
   </div>
 </div>
@@ -558,16 +642,26 @@
   <h2>网页猫猫</h2>
   <div class="divider"><i></i><span>MEOW</span><i></i></div>
 
-  <div class="hint" style="margin:-2px 0 10px;color:#ffd79a">
-    💡 国内网络建议科学上网，加载与交互会更流畅；建议使用 Chrome / Edge / Safari 等现代浏览器
+  <div class="gateMust">
+    <span class="mustTag">必读</span>
+    <span class="mustText">请先开启<strong>科学上网</strong>，否则模型与语音无法加载</span>
   </div>
-  <p>开摄像头，让猫看见你；开语音，让猫听懂你。它会用眼睛追随你的脸和手，也会在你说话时做出反应。所有识别都在你的浏览器本地完成，画面与声音都不上传。</p>
-  <div id="preloadHint" class="hint">⏳ 正在加载场景与猫咪模型…按钮稍后出现</div>
+  <div class="gateBrowser">推荐使用 <strong>Chrome</strong> / <strong>Edge</strong> 浏览器</div>
+
+  <p class="pitch"><strong>网页猫猫</strong>，让你在工位上拥有一只自己的 3D 宠物。</p>
+  <p class="desc">它会在猫窝里踱步、打盹、伸懒腰，也会被你的表情、手势和声音逗得回应你。</p>
+  <ul class="plays">
+    <li><b>看猫猫</b><span>打开摄像头，它会跟着你的脸和手看</span></li>
+    <li><b>说说话</b><span>按住空格说「咪咪」「坐下」「展示」</span></li>
+    <li><b>逗猫棒</b><span>切到逗猫棒模式，用鼠标陪它玩</span></li>
+  </ul>
+
+  <div id="preloadHint" class="hint">⏳ 正在加载场景与猫咪模型，按钮稍后出现</div>
   <div id="gateActions">
-    <button id="startBtn">进入猫窝</button>
-    <div class="hint">点一次即申请<b>摄像头 + 麦克风</b>权限；之后说「<b>咪咪</b>」它会走过来，说「<b>坐下</b>」它会坐下</div>
-    <div class="hint" id="loadHint">首次进入要先下载约 15&nbsp;MB 的识别模型，请耐心等 10~30 秒。<br>
-    如果浏览器弹了权限框，请都允许；若点完没反应，点地址栏左侧的摄像头/麦克风图标允许后刷新重试。</div>
+    <button id="startBtn">授权进入猫窝</button>
+    <div class="hint">一次授权，同时开启摄像头与麦克风；数据都在浏览器本地处理，不会上传。</div>
+    <div class="hint" id="loadHint">首次进入需下载约 15&nbsp;MB 识别模型，请等 10~30 秒。<br>
+    若点完没有反应，请在地址栏允许摄像头与麦克风，然后刷新重试。</div>
   </div>
   <p id="camErr" role="alert"></p>
   <div class="issue">ISSUE 01 · 网页猫猫 · MMXXVI</div>
@@ -3219,13 +3313,47 @@ async function startCamera(){
       video.addEventListener('error',finish);
     });
   }
-  STATE.camOn = true;
+  STATE.camOn = true; STATE._detPause=false; lastVideoTime=-1;
   document.getElementById('pip').style.display='block';
   setDot(ui.camDot,true); ui.camState.textContent='已开启';
   try{ await video.play(); }catch(e){ console.warn('video.play() 被浏览器拦截，识别仍会继续', e); }
 }
 
+// 切换模式时「暂停摄像头」而不是关掉：保留视频流 12 秒，切回可秒开（避免 getUserMedia 的 1~2 秒卡顿 + 设备反复开关）
+let camSuspended=false, camReleaseTimer=null;
+const CAM_KEEP_MS=12000;
+function suspendCamera(){
+  if(!STATE.camOn || camSuspended) return;
+  camSuspended=true;
+  STATE._detPause=true;
+  const pip=document.getElementById('pip'); if(pip) pip.style.display='none';
+  STATE.face={active:false}; STATE.hand={active:false}; gazeEst.have=false;
+  STATE._pawLiftTarget={L:0,R:0}; STATE._pinchHeld=false;
+  liftHold.L.on=false; liftHold.L.lost=0; liftHold.R.on=false; liftHold.R.lost=0;
+  setDot(ui.faceDot,false); ui.faceState.textContent='已暂停';
+  setDot(ui.handDot,false); ui.handState.textContent='已暂停';
+  ui.camState.textContent='已暂停';
+  if(camReleaseTimer) clearTimeout(camReleaseTimer);
+  camReleaseTimer=setTimeout(()=>{
+    camReleaseTimer=null;
+    if(STATE.inputMode!=='mouse') return;      // 已经切回摄像头就不释放
+    camSuspended=false; stopCamera();
+  }, CAM_KEEP_MS);
+}
+function resumeCamera(){
+  if(!camSuspended) return false;
+  camSuspended=false;
+  if(camReleaseTimer){ clearTimeout(camReleaseTimer); camReleaseTimer=null; }
+  if(!STATE.camOn) return false;
+  STATE._detPause=false;
+  const pip=document.getElementById('pip'); if(pip) pip.style.display='block';
+  setDot(ui.camDot,true); ui.camState.textContent='已开启';
+  lastVideoTime=-1;
+  return true;
+}
 function stopCamera(){
+  if(camReleaseTimer){ clearTimeout(camReleaseTimer); camReleaseTimer=null; }
+  camSuspended=false; STATE._detPause=false;
   const v=document.getElementById('pipVideo');
   if(v && v.srcObject){ v.srcObject.getTracks().forEach(t=>t.stop()); v.srcObject=null; }
   document.getElementById('pip').style.display='none';
@@ -3454,6 +3582,7 @@ window.renderCalibUI=renderCalibUI;
 function detectLoop(){
   requestAnimationFrame(detectLoop);
   if(!video || video.readyState<2) return;
+  if(STATE._detPause) return;                    // 逗猫棒模式：视频流保留但不做人脸/手势检测
   if(video.currentTime===lastVideoTime) return;
   lastVideoTime = video.currentTime;
   // 隔帧检测：渲染仍 60fps，识别降到约 30fps（手势/表情响应延迟仅 +16ms，省一半 CPU）
@@ -3520,7 +3649,8 @@ function detectLoop(){
   }
   // 去抖保持：条件短暂丢失（手势误判/丢帧）时爪子仍保持，连续丢失超过 .35s 才放下
   updateLift('L',rawCond.L,liftDt); updateLift('R',rawCond.R,liftDt);
-  STATE._pawLiftTarget={L:liftHold.L.on?1:0, R:liftHold.R.on?1:0};
+  // 手舞足蹈自己驱动抬爪通道（它会真正抬爪）；手势检测不要覆盖，否则语音/自主触发的跳舞前爪不动
+  if(STATE.action!=='dance') STATE._pawLiftTarget={L:liftHold.L.on?1:0, R:liftHold.R.on?1:0};
 }
 
 const camErrEl = document.getElementById('camErr');
@@ -3550,6 +3680,7 @@ window.__enterMain = function(){
   if(STATE.entered) return;
   STATE.entered=true;
   document.getElementById('gate').classList.add('hidden');
+  document.body.classList.remove('inGate');      // 进场后界面淡入
   if(window.CatAudio && CatAudio.unlock) CatAudio.unlock();   // 用户手势内解锁音频，呼噜随后可自动播放
   if(!STATE.hasJoined){ STATE.action='walkIn'; STATE.actionT=0; }
 };
@@ -3585,7 +3716,7 @@ startBtn.addEventListener('click', async ()=>{
   }finally{
     if(loadTimer) clearInterval(loadTimer);
     startBtn.disabled = false;
-    startBtn.textContent = '进入猫窝';
+    startBtn.textContent = '授权进入猫窝';
   }
 });
 /* 逗猫棒入口按钮已移除：进入主界面统一由「开启摄像头 / 开启语音」触发 */
@@ -3619,7 +3750,7 @@ async function ensureDetectionWithin(ms){
 modeMouseBtn.addEventListener('click', ()=>{
   if(STATE.inputMode==='mouse') return;
   STATE.inputMode='mouse';
-  if(STATE.camOn) stopCamera();
+  if(STATE.camOn) suspendCamera();          // 只暂停，12 秒内切回可秒开
   syncModeUI();
 });
 modeCamBtn.addEventListener('click', async ()=>{
@@ -3627,6 +3758,7 @@ modeCamBtn.addEventListener('click', async ()=>{
   modeCamBtn.disabled=true;
   try{
     STATE.inputMode='camera'; syncModeUI();
+    if(resumeCamera()) return;               // 12 秒内切回：直接恢复，无需重新打开摄像头
     await startCamera();
     await ensureDetection();
   }catch(err){
@@ -4225,8 +4357,8 @@ if(!_NO_MAT) applyTex();
 
   /* 意图 + 同义词（长句包含也命中，取最长匹配） */
   const INTENTS=[
-    {id:'come', words:['咪咪','小猫咪','小咪','喵喵','喵','猫猫','咪咪呀','小猫咪咪'], desc:'走过来'},
-    {id:'sit',  words:['坐下','坐好','快坐下','坐'],                               desc:'坐下'},
+    {id:'come', words:['咪咪','小猫咪','小咪','喵喵','猫猫','咪咪呀','小猫咪咪'], desc:'走过来'},
+    {id:'sit',  words:['坐下','坐好','快坐下'],                                       desc:'坐下'},
     {id:'show', words:['展示','秀一下','秀一个','跳一个','跳支舞','动一动','露一手','表演一个','表演一下','来个绝活'],
                 desc:'随机表演'},
   ];
