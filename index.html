@@ -3015,7 +3015,7 @@ const CatAudio=(()=>{
     if(!built||!unlocked) return;
     const p=Math.max(0,Math.min(1,purrLevel));
     const fade=Math.max(0,Math.min(1,fadeIn));
-    const purrTarget=(.25+.75*p)*.72*.95*.85*.50*fade;  // 呼噜再降 30%，随 walkIn 渐入
+    const purrTarget=(.25+.75*p)*.72*.95*.85*.25*fade;  // 再减 50%（用户要求），随 walkIn 渐入
     purrEl.volume+=(purrTarget-purrEl.volume)*Math.min(1,dt*6);
     if(purrEl.paused) tryPlay(purrEl);
     // 音效响起时压低音乐（ducking）：0.55s 内保持 42%，之后缓慢恢复
@@ -3816,6 +3816,12 @@ modeMouseBtn.addEventListener('click', ()=>{
   STATE.inputMode='mouse';
   if(STATE.camOn) suspendCamera();          // 只暂停，12 秒内切回可秒开
   resetSessionForModeSwitch();
+  // 清掉上一次鼠标/摄像头残留的瞄准点：刚切进来时指针还没动，头不该先偏一下
+  STATE.pointer.active=false; STATE.pointer.t=-1e9;
+  STATE.pointer.x=.5; STATE.pointer.y=.5;
+  STATE.aim.x=.5; STATE.aim.y=.5;
+  STATE.microX=0; STATE.microY=0;
+  STATE.target.x=.5; STATE.target.y=.5;
   syncModeUI();
 });
 modeCamBtn.addEventListener('click', async ()=>{
